@@ -1,0 +1,22 @@
+{
+  "name": "starter-template",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "parcel ./src/index.html",
+    "test": "echo \"Error: no tests installed\" && exit 1",
+    "build": "tsc",
+    "prestart": "npm run build"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/d3": "^5.7.2",
+    "d3": "^5.9.7",
+    "ramda": "^0.26.1"
+  },
+  "devDependencies": {
+    "typescript": "^3.5.3"
+  }
+}

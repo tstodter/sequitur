@@ -2,7 +2,8 @@ const R = require('ramda');
 
 import {
   MachineDescription,
-  MachineDescriptionAdd2
+  MachineDescriptionAdd2,
+  MachineDescriptionSubtract
 } from './MachineDescription';
 import {
   MachineResponse,
@@ -15,6 +16,7 @@ import {
   Effect,
   Series,
   Parallel,
+  Subtract,
 } from './MachineResponse';
 
 export type Machine = {
@@ -40,9 +42,20 @@ export const Machine = (desc: MachineDescription): Machine => {
         machine.desc,
         res.operand
       );
+      console.log('-----', machine.desc);
+
+    },
+    async (res: Subtract) => {
+      machine.desc = MachineDescriptionSubtract(
+        machine.desc,
+        res.operand
+      );
+      console.log('-----', machine.desc);
+
     },
     async (res: Effect) => res.effect(),
     async (res: Send) => {
+      console.log('-----', 'sending', res.name, res.message);
       const eventName = res.name;
       const msg = res.message;
 

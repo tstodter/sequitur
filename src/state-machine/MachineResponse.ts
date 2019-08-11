@@ -1,3 +1,5 @@
+const R = require('ramda');
+
 import {MachineDescription} from './MachineDescription';
 
 export type MachineResponse =
@@ -7,7 +9,7 @@ export type MachineResponse =
   | void;
 
 export type PlainMachineResponse =
-  | Add | Send | Effect
+  | Add | Subtract | Send | Effect
   | Series | Parallel;
 
 export type MachineResponsePromise =
@@ -26,6 +28,15 @@ export type Add = {
 };
 export const Add = (desc: MachineDescription): Add => ({
   kind: 'add',
+  operand: desc
+});
+
+export type Subtract = {
+  kind: 'subtract';
+  operand: MachineDescription;
+};
+export const Subtract = (desc: MachineDescription): Subtract => ({
+  kind: 'subtract',
   operand: desc
 });
 
@@ -55,7 +66,11 @@ export type Series = {
 };
 export const Series = (...responses: Array<MachineResponse>): Series => ({
   kind: 'series',
-  responses
+  responses: R.chain((res: MachineResponse) => (
+    typeguards.isSeries(res)
+      ? res.responses
+      : res
+  ))(responses)
 });
 
 export type Parallel = {
@@ -64,7 +79,11 @@ export type Parallel = {
 };
 export const Parallel = (...responses: Array<MachineResponse>): Parallel => ({
   kind: 'parallel',
-  responses
+  responses: R.chain((res: MachineResponse) => (
+    typeguards.isParallel(res)
+      ? res.responses
+      : res
+  ))(responses)
 });
 
 const isMachineResponsePromise = (res: MachineResponse): res is MachineResponsePromise => (
@@ -78,6 +97,9 @@ const isPlainMachineResponse = (res: MachineResponse): res is PlainMachineRespon
 );
 const isAdd = (res: MachineResponse): res is Add => (
   isPlainMachineResponse(res) && res.kind === 'add'
+);
+const isSubtract = (res: MachineResponse): res is Subtract => (
+  isPlainMachineResponse(res) && res.kind === 'subtract'
 );
 const isSend = (res: MachineResponse): res is Send => (
   isPlainMachineResponse(res) && res.kind === 'send'
@@ -97,10 +119,34 @@ export const typeguards = {
   isMachineResponseF,
   isPlainMachineResponse,
   isAdd,
+  isSubtract,
   isSend,
   isEffect,
   isSeries,
   isParallel
+};
+
+export const AddMachineResponse = Parallel;
+
+export const SubtractMachineResponse = (a: MachineResponse, b: MachineResponse): MachineResponse => {
+  if (isParallel(a)) {
+    if (isParallel(b)) {
+      return Parallel(R.without(b.responses, a.responses));
+    } else {
+      return Parallel(R.without([b], a.responses));
+    }
+  } else {
+    if (isParallel(b)) {
+      const withBRemoved: [MachineResponse] = R.without(b.responses, [a]);
+      return withBRemoved.length > 0
+        ? withBRemoved[0]
+        : undefined;
+    } else {
+      return a === b
+        ? undefined
+        : a;
+    }
+  }
 };
 
 export const match = <T>(
@@ -108,6 +154,7 @@ export const match = <T>(
   onPromise : (_: MachineResponsePromise) => T,
   onF       : (_: MachineResponseF) => T,
   onAdd     : (_: Add) => T,
+  onSubtract: (_: Subtract) => T,
   onEffect  : (_: Effect) => T,
   onSend    : (_: Send) => T,
   onSeries  : (_: Series) => T,
@@ -119,6 +166,7 @@ export const match = <T>(
 
   switch (res.kind) {
     case 'add'     : return onAdd(res);
+    case 'subtract': return onSubtract(res);
     case 'effect'  : return onEffect(res);
     case 'send'    : return onSend(res);
     case 'series'  : return onSeries(res);

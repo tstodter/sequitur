@@ -13,9 +13,9 @@ import * as d3 from 'd3';
 const R = require('ramda');
 
 import TimestepDriver, { onTimeStep } from './drivers/TimestepDriver';
-import KeypressDriver, { onKeyPressed, onKeyUnpressed } from './drivers/KeypressDriver';
+import KeypressDriver, { onKeyPressed, onKeyUnpressed, LetterDriver, WhitespaceDriver } from './drivers/KeypressDriver';
 import {addDrivers} from './drivers/Driver';
-import { MachineDescriptionAdd, MachineDescription } from './state-machine/MachineDescription';
+import { MachineDescriptionAdd, MachineDescription, MachineDescriptionSubtract } from './state-machine/MachineDescription';
 import { LogMachine, onLog } from './machines/LogMachine';
 import { Send, Series, Add, Effect } from './state-machine/MachineResponse';
 import { Machine } from './state-machine/Machine';
@@ -194,16 +194,32 @@ const machine = Machine(
   MachineDescriptionAdd(
     SwarmMachine,
     SwarmControllerMachine,
-    SequenceMachine([onKeyPressed('Space'), onKeyPressed('KeyF'), onKeyPressed('KeyG')], ShowDialogue('What it is my dog')),
+    SequenceMachine([
+      onKeyPressed('Space'),
+      onKeyPressed('KeyF'),
+      onKeyPressed('KeyG')
+    ], ShowDialogue('What it is my dog')),
     IntroMachine,
     IntroController,
     LogMachine
   )
 );
 
+const machine2 = Machine(
+  MachineDescriptionAdd(
+    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from one')},
+    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from two')},
+    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from three')},
+    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from four')},
+    LogMachine
+  )
+);
+
 const driver = addDrivers(
   // TimestepDriver,
-  KeypressDriver
+  LetterDriver,
+  WhitespaceDriver
 )(machine);
 
 driver.engage();
+console.log(machine2);

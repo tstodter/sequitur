@@ -59,23 +59,31 @@ const SpecificKeyUnpressedEvent = (code: string, time: number): SpecificKeyUnpre
 ]);
 
 const KeypressDriver = (
+  keys: Array<string> = []
+) => (
   machine: Machine
 ): Driver => {
   let shouldContinue = true;
 
+  const keysToWatch = new Set(keys);
   const keyPresses: {[k: string]: number} = {};
 
   window.addEventListener('keydown', (evt: KeyboardEvent) => {
-    if (!keyPresses[evt.code])
-      keyPresses[evt.code] = performance.now();
+    if (keys.length === 0 || keysToWatch.has(evt.code)) {
+      if (!keyPresses[evt.code]) {
+        keyPresses[evt.code] = performance.now();
+      }
+    }
   });
 
   window.addEventListener('keyup', (evt: KeyboardEvent) => {
-    delete keyPresses[evt.code];
+    if (keys.length === 0 || keysToWatch.has(evt.code)) {
+      delete keyPresses[evt.code];
 
-    const now = performance.now();
-    machine.send(...SpecificKeyUnpressedEvent(evt.code, now));
-    machine.send(...GenericKeyUnpressedEvent(evt.code, now));
+      const now = performance.now();
+      machine.send(...SpecificKeyUnpressedEvent(evt.code, now));
+      machine.send(...GenericKeyUnpressedEvent(evt.code, now));
+    }
   });
 
   return {
@@ -104,4 +112,16 @@ const KeypressDriver = (
   };
 };
 
+const letters = [
+  'KeyA', 'KeyB', 'KeyC', 'KeyD', 'KeyE', 'KeyF', 'KeyG', 'KeyH', 'KeyI',
+  'KeyJ', 'KeyK', 'KeyL', 'KeyM', 'KeyN', 'KeyO', 'KeyP', 'KeyQ', 'KeyR',
+  'KeyS', 'KeyT', 'KeyU', 'KeyV', 'KeyW', 'KeyX', 'KeyY', 'KeyZ'
+];
+
+const whitespace = [
+  'Space', 'Enter'
+];
+
+export const WhitespaceDriver = KeypressDriver(whitespace);
+export const LetterDriver = KeypressDriver(letters);
 export default KeypressDriver;

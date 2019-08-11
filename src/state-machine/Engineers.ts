@@ -1,39 +1,45 @@
 const R = require('ramda');
 import { MachineDescription } from "./MachineDescription";
-import { Add, Series, MachineResponse, PlainMachineResponse, MachineResponseF, typeguards } from "./MachineResponse";
+import { Add, Series, MachineResponse, PlainMachineResponse, MachineResponseF, typeguards, Subtract } from "./MachineResponse";
 
 type SequenceMachine = (
   events: Array<string>,
   handler: MachineResponse
 ) => MachineDescription;
 
-export const SequenceMachine: SequenceMachine = (events, handler) => {
-  const SeqHelper = (events: Array<string>, msgAcc: Array<any>, lastEvent?: string): MachineDescription => ({
-    [events[0]]: async (msg: any) => {
-      const deleteLastEvent = !!lastEvent
-        ? Add({
-          [lastEvent]: () => {}
-        })
-        : undefined;
+export const SequenceMachine: SequenceMachine = (allEvents, handler) => {
+  const SeqHelper = (helperEvents: Array<string>, msgAcc: Array<any>, lastEvent?: string): MachineDescription => {
+    const thisMachine: MachineDescription = {
+      [helperEvents[0]]: async (msg: any) => {
+        // const deleteLastEvent = !!lastEvent
+        //   ? Add({
+        //     [lastEvent]: () => {}
+        //   })
+        //   : undefined;
 
-      const msgsSoFar = msgAcc.concat(msg);
+        const msgsSoFar = msgAcc.concat(msg);
 
-      return events.length === 1
-        ? Series(
-            Add({
-              [events[0]]: () => {}
-            }),
-            typeguards.isMachineResponseF(handler)
-              ? await handler(msgsSoFar)
-              : handler,
-            deleteLastEvent
-          )
-        : Series(
-            Add(SeqHelper(R.tail(events), msgsSoFar, msg)),
-            deleteLastEvent
-          );
-    }
-  });
+        return helperEvents.length === 1
+          ? Series(
+              Subtract(thisMachine),
+              Add(
+                SeqHelper(allEvents, [])
+              ),
+              typeguards.isMachineResponseF(handler)
+                ? await handler(msgsSoFar)
+                : handler
+            )
+          : Series(
+              Subtract(thisMachine),
+              Add(
+                SeqHelper(R.tail(helperEvents), msgsSoFar, msg)
+              )
+            );
+      }
+    };
 
-  return SeqHelper(events, [])
+    return thisMachine;
+  };
+
+  return SeqHelper(allEvents, []);
 };

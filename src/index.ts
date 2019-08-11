@@ -46,12 +46,14 @@ const dialogue = svg
   .attr('text-anchor', 'middle');
 
 type DialogueSelection = d3.Selection<SVGTextElement, any, HTMLElement, any>;
-const makeShowDialgoue = (sel: DialogueSelection) => (text: string) => Series(
-  Effect(() => sel.style('opacity', 0)),
-  Effect(() => sel.text(text)),
-  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 1)),
-  wait(2000),
-  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 0)),
+const makeShowDialgoue = (sel: DialogueSelection) => (text: string) => (
+  Series(
+    Effect(() => sel.style('opacity', 0)),
+    Effect(() => sel.text(text)),
+    TransitionEffect(() => sel.transition().duration(1000).style('opacity', 1)),
+    wait(2000),
+    TransitionEffect(() => sel.transition().duration(1000).style('opacity', 0)),
+  )
 );
 
 const ShowDialogue = makeShowDialgoue(dialogue);

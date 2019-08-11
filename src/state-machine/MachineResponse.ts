@@ -103,3 +103,25 @@ export const typeguards = {
   isParallel
 };
 
+export const match = <T>(
+  onVoid    : () => T,
+  onPromise : (_: MachineResponsePromise) => T,
+  onF       : (_: MachineResponseF) => T,
+  onAdd     : (_: Add) => T,
+  onEffect  : (_: Effect) => T,
+  onSend    : (_: Send) => T,
+  onSeries  : (_: Series) => T,
+  onParallel: (_: Parallel) => T
+) => (res: MachineResponse) => {
+  if (!res)                          return onVoid();
+  if (isMachineResponsePromise(res)) return onPromise(res);
+  if (isMachineResponseF(res))       return onF(res);
+
+  switch (res.kind) {
+    case 'add'     : return onAdd(res);
+    case 'effect'  : return onEffect(res);
+    case 'send'    : return onSend(res);
+    case 'series'  : return onSeries(res);
+    case 'parallel': return onParallel(res);
+  }
+};

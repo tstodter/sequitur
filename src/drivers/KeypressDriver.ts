@@ -1,40 +1,35 @@
 import {Driver} from './Driver';
 import {Machine} from '../event-based-state-machine/Machine';
 
-export const onKeyDown = (code?: string) => (
+export const onKeyPressed = (code?: string) => (
   !!code
-    ? `onKeyDown-${code}`
-    : 'onKeyDown'
+    ? `onKeyPressed-${code}`
+    : 'onKeyPressed'
 );
 
-const keypress = (): Promise<string> => (
-  new Promise(resolve => {
-    const handler = (evt: KeyboardEvent) => {
-      window.removeEventListener('keydown', handler);
-      resolve(evt.code);
-    };
-
-    window.addEventListener('keydown', handler);
-  })
+export const onKeyUnpressed = (code?: string) => (
+  !!code
+    ? `onKeyUnpressed-${code}`
+    : 'onKeyUnpressed'
 );
 
-export type GenericKeypressMessage = string;
-type GenericKeypressEvent = [
+export type GenericKeypressedMessage = string;
+type GenericKeypressedEvent = [
   string,
-  GenericKeypressMessage
+  GenericKeypressedMessage
 ];
-const GenericKeypressEvent = (code: string): GenericKeypressEvent => ([
-  onKeyDown(),
+const GenericKeypressedEvent = (code: string): GenericKeypressedEvent => ([
+  onKeyPressed(),
   code
 ]);
 
-export type SpecificKeypressMessage = number;
-type SpecificKeypressEvent = [
+export type SpecificKeypressedMessage = number;
+type SpecificKeypressedEvent = [
   string,
-  SpecificKeypressMessage
+  SpecificKeypressedMessage
 ];
-const SpecificKeypressEvent = (code: string): SpecificKeypressEvent => ([
-  onKeyDown(code),
+const SpecificKeypressedEvent = (code: string): SpecificKeypressedEvent => ([
+  onKeyPressed(code),
   performance.now()
 ]);
 
@@ -43,23 +38,29 @@ const KeypressDriver = (
 ): Driver => {
   let shouldContinue = true;
 
-  const awaitKeyPresses = async () => {
-    const key = await keypress();
+  const keyPresses: {[k: string]: boolean} = {};
 
-    Promise.all([
-      machine.send(...GenericKeypressEvent(key)),
-      machine.send(...SpecificKeypressEvent(key))
-    ]).then(() => {
-      if (key === 'Space') console.log(machine);
-    });
+  window.addEventListener('keydown', (evt: KeyboardEvent) => {
+    keyPresses[evt.code] = true;
+  });
 
-    if (shouldContinue)
-      awaitKeyPresses();
-  };
+  window.addEventListener('keyup', (evt: KeyboardEvent) => {
+    delete keyPresses[evt.code];
+  });
 
   return {
     engage: () => {
-      awaitKeyPresses();
+      const onAnimationFrame = () => {
+        Object.keys(keyPresses).forEach(k => {
+          machine.send(...SpecificKeypressedEvent(k));
+        });
+
+        if (shouldContinue) {
+          window.requestAnimationFrame(onAnimationFrame);
+        }
+      };
+
+      window.requestAnimationFrame(onAnimationFrame);
     },
     stop: () => {
       shouldContinue = false;

@@ -1,8 +1,19 @@
+// TODO
+/*
+// - Fix brokedness
+// - let machine descriptions have non-promise returning functions
+// - remove acc from responders
+- Parallel-ize machine adds
+- include plain function in responder, along with machineResponses
+- add subtraction response
+- remove val response
+*/
+
 import * as d3 from 'd3';
 const R = require('ramda');
 
 import TimestepDriver, { onTimeStep } from './drivers/TimestepDriver';
-import KeypressDriver, { onKeyDown, GenericKeypressMessage, SpecificKeypressMessage } from './drivers/KeypressDriver';
+import KeypressDriver, { onKeyPressed } from './drivers/KeypressDriver';
 import {addDrivers} from './drivers/Driver';
 import { MachineDescriptionAdd, MachineDescription } from './event-based-state-machine/MachineDescription';
 import { LogMachine, onLog } from './machines/LogMachine';
@@ -13,8 +24,8 @@ import { SequenceMachine } from './event-based-state-machine/Engineers';
 
 
 ////////////////////////
-const width = 975;
-const height = width / 2;
+const width = window.innerWidth;
+const height = window.innerHeight;
 
 const viewBox: (opts: {minX: number; minY: number; width: number; height: number}) => string
   = ({minX, minY, width, height}) => `${minX} ${minY} ${width} ${height}`;
@@ -98,9 +109,8 @@ d3.select('svg')
 const simulation = d3.forceSimulation(nodeData)
   .velocityDecay(.8)
   .alphaDecay(0)
-  .force('cohesion', d3.forceManyBody().strength(1))
-  .force('collide', d3.forceCollide().radius(10))
-  // .force('links', d3.forceLink(linkData).distance(0))
+  // .force('cohesion', d3.forceManyBody().strength(1))
+  .force('collide', d3.forceCollide().radius(15))
   .force('mouse-gravity-x', mouseForceX)
   .force('mouse-gravity-y', mouseForceY)
   .on('tick', () => {
@@ -114,15 +124,15 @@ const simulation = d3.forceSimulation(nodeData)
 //   MachineDescriptionAdd(
 //     {
 //       [onTimeStep]: async (mach, msg) => Send(onLog, msg),
-//       [onKeyDown()]: Send(onLog, `generic code`),
-//       [onKeyDown('Space')]: Series(
+//       [onKeyPressed()]: Send(onLog, `generic code`),
+//       [onKeyPressed('Space')]: Series(
 //         wait(1000),
 //         Effect(() => {
 //           alert('hi there');
 //         }),
 //         Send(onLog, 'logging after 1000'),
 //         Add({
-//           [onKeyDown('KeyF')]: Send(onLog, 'logging after keyf')
+//           [onKeyPressed('KeyF')]: Send(onLog, 'logging after keyf')
 //         }),
 //         wait(1000),
 //         Effect(() => {
@@ -134,7 +144,18 @@ const simulation = d3.forceSimulation(nodeData)
 //   )
 // );
 
-// const TransitionEffect = (trans: () => d3.Transition<d3.BaseType, unknown, d3.BaseType, any>) => Effect()
+type D3Transition = d3.Transition<any, any, any, any>;
+const transitionP = (trans: D3Transition): Promise<void> => (
+  new Promise(resolve => (
+    trans.on('end', () => resolve())
+  ))
+);
+
+const TransitionEffect = (transF: () => D3Transition) => (
+  Effect(() => transitionP(
+    transF()
+  ))
+);
 
 const dialogue = svg
   .append('text')
@@ -148,29 +169,30 @@ const makeShowDialgoue = (sel: DialogueSelection) => (text: string) => Series(
   Effect(() => sel.style('opacity', 0)),
   Effect(() => sel.text(text)),
   // is brokeded
-  Effect(() => new Promise(resolve => sel.transition().duration(1000).style('opacity', 1).on('end', resolve))),
-  Effect(() => new Promise(resolve => sel.transition().duration(3000).delay(1000).style('opacity', 0).on('end', resolve))),
+  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 1)),
+  wait(2000),
+  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 0)),
+  // Effect(() => new Promise(resolve => sel.transition().duration(1000).style('opacity', 1).on('end', () => {console.log('resolve 1'); resolve();}))),
+  // Effect(() => new Promise(resolve => sel.transition().duration(1000).delay(0).style('opacity', 0).on('end', () => {console.log('resolve 2'); resolve();}))),
 );
 
 const ShowDialogue = makeShowDialgoue(dialogue);
 
 
 const wasdMachine: MachineDescription = {
-  [onKeyDown('KeyW')]: Send('move-swarm', 'up'),
-  [onKeyDown('KeyA')]: Send('move-swarm', 'left'),
-  [onKeyDown('KeyS')]: Send('move-swarm', 'down'),
-  [onKeyDown('KeyD')]: Send('move-swarm', 'right'),
+  [onKeyPressed('KeyW')]: Send('move-swarm', 'up'),
+  [onKeyPressed('KeyA')]: Send('move-swarm', 'left'),
+  [onKeyPressed('KeyS')]: Send('move-swarm', 'down'),
+  [onKeyPressed('KeyD')]: Send('move-swarm', 'right'),
 };
 
 const swarmMachine: MachineDescription = {
-  [onKeyDown('KeyP')]: Send('toggle-swarm'),
+  [onKeyPressed('KeyP')]: Send('toggle-swarm'),
   'toggle-swarm': Effect(() => {
     simulation.alpha(simulation.alpha() > 0 ? 0 : 1);
     simulation.restart();
   }),
-  'move-swarm': async (acc, msg) => {
-    const direction = msg as 'up' | 'down' | 'left' | 'right';
-
+  'move-swarm': async (direction: 'up' | 'down' | 'left' | 'right') => {
     const MoveMouseForce = (byX: number, byY: number) => {
       mousePos[0] += byX;
       mousePos[1] += byY;
@@ -178,11 +200,13 @@ const swarmMachine: MachineDescription = {
       return Effect(() => updateMouseForce(mousePos[0], mousePos[1]));
     };
 
+    const speed = 10;
+
     switch (direction) {
-      case 'up':    return MoveMouseForce(0, -50);
-      case 'down':  return MoveMouseForce(0, 50);
-      case 'left':  return MoveMouseForce(-50, 0);
-      case 'right': return MoveMouseForce(50, 0);
+      case 'up':    return MoveMouseForce(0, -speed);
+      case 'down':  return MoveMouseForce(0, speed);
+      case 'left':  return MoveMouseForce(-speed, 0);
+      case 'right': return MoveMouseForce(speed, 0);
     }
   }
 };
@@ -195,10 +219,10 @@ const machine = Machine(
   MachineDescriptionAdd(
     swarmMachine,
     wasdMachine,
-    SequenceMachine([onKeyDown('Space'), onKeyDown('KeyF'), onKeyDown('KeyG')], ShowDialogue('What it is my dog')),
+    SequenceMachine([onKeyPressed('Space'), onKeyPressed('KeyF'), onKeyPressed('KeyG')], ShowDialogue('What it is my dog')),
     IntroMachine,
     {
-      [onKeyDown('KeyK')]: Send('intro-start')
+      [onKeyPressed('KeyK')]: Send('intro-start')
     },
     LogMachine
   )

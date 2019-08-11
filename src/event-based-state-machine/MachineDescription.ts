@@ -1,9 +1,7 @@
 import { MachineResponse, PlainMachineResponse } from "./MachineResponse";
 
-export type MachineReducer = (acc: MachineDescription, msg: any) => Promise<MachineResponse>;
-
 export type MachineDescription = {
-  [event: string]: MachineReducer | PlainMachineResponse
+  [event: string]: MachineResponse
 };
 
 export const EmptyMachineDescription = (): MachineDescription => ({});

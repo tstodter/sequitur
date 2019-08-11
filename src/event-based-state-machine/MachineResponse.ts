@@ -2,7 +2,7 @@ import {MachineDescription} from './MachineDescription';
 
 export type MachineResponse =
   | PlainMachineResponse
-  | MachineResponseThunk
+  | MachineResponseF
   | MachineResponsePromise
   | void;
 
@@ -13,12 +13,12 @@ export type PlainMachineResponse =
 export type MachineResponsePromise =
   | Promise<
       | PlainMachineResponse
-      | MachineResponseThunk
+      | MachineResponseF
       | void
     >;
 
-export type MachineResponseThunk =
-  () => MachineResponse;
+export type MachineResponseF =
+  (...msg: Array<any>) => MachineResponse;
 
 export type Add = {
   kind: 'add';
@@ -51,7 +51,7 @@ export const Send = (name: string, message?: any): Send => ({
 
 export type Effect = {
   kind: 'effect';
-  effect: () => void
+  effect: () => void | Promise<void>
 };
 export const Effect = (effect: () => void): Effect => ({
   kind: 'effect',
@@ -79,11 +79,11 @@ export const Parallel = (...responses: Array<MachineResponse>): Parallel => ({
 const isMachineResponsePromise = (res: MachineResponse): res is MachineResponsePromise => (
   res instanceof Promise
 );
-const isMachineResponseThunk = (res: MachineResponse): res is MachineResponseThunk => (
+const isMachineResponseF = (res: MachineResponse): res is MachineResponseF => (
   res instanceof Function
 );
 const isPlainMachineResponse = (res: MachineResponse): res is PlainMachineResponse => (
-  !!res && !isMachineResponsePromise(res) && !isMachineResponseThunk(res)
+  !!res && !isMachineResponsePromise(res) && !isMachineResponseF(res)
 );
 const isVal = (res: MachineResponse): res is Val => (
   isPlainMachineResponse(res) && res.kind === 'val'
@@ -106,7 +106,7 @@ const isParallel = (res: MachineResponse): res is Parallel => (
 
 export const typeguards = {
   isMachineResponsePromise,
-  isMachineResponseThunk,
+  isMachineResponseF,
   isPlainMachineResponse,
   isVal,
   isAdd,

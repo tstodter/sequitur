@@ -24,6 +24,7 @@ export const Machine = (desc: MachineDescription): Machine => {
   };
 
   const handleResponse = async (res: MachineResponse): Promise<any | MachineDescription> => {
+    debugger;
     if (tg.isVal(res)) {
       // console.log('-----', 'handling', res.kind, res.val);
       return res.val;
@@ -48,28 +49,27 @@ export const Machine = (desc: MachineDescription): Machine => {
 
       if (R.has(eventName, machine.desc)) {
         let handler = machine.desc[eventName];
+
         if (handler instanceof Function) { // isMachineReducer
-          return handleResponse(await handler(machine.desc, msg));
+          return handleResponse(await handler(msg));
         } else {
           return handleResponse(handler);
         }
         // const result = await machine.desc[eventName](machine.desc, msg);
         // return handleResponse(result);
       } else {
-        console.log(`No handler found for ${eventName}`);
+        // console.log(`No handler found for ${eventName}`);
       }
     }
     else
     if (tg.isEffect(res)) {
-      console.log('-----', 'effecting', res.effect);
+      // console.log('-----', 'effecting', res.effect);
 
-      res.effect();
-
-      return;
+      return res.effect();
     }
     else
     if (tg.isSeries(res)) {
-      // console.log('-----', 'handling', res.kind, res.responses);
+      // console.log('-----', 'handling', 'series', res.responses);
       return res.responses.reduce(async (accP: Promise<MachineResponse>, respItem: MachineResponse) => {
         const acc = await accP;
 
@@ -78,7 +78,7 @@ export const Machine = (desc: MachineDescription): Machine => {
     }
     else
     if (tg.isParallel(res)) {
-      // console.log('-----', 'handling', res.kind, res.responses);
+      // console.log('-----', 'handling', 'parallel', res.responses);
 
       return Promise.all(res.responses.map(handleResponse));
     }
@@ -89,11 +89,11 @@ export const Machine = (desc: MachineDescription): Machine => {
       return handleResponse(await res);
     }
     else
-    if (tg.isMachineResponseThunk(res)) {
-      console.log('--------', 'handling', 'thunk');
+    if (tg.isMachineResponseF(res)) {
+      // console.log('--------', 'handling', 'function');
       return handleResponse(res());
     }
-    // console.log('-----', 'handling', 'nothing');
+    // // console.log('-----', 'handling', 'nothing');
   };
 
   return machine;

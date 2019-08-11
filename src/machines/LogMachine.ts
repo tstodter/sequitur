@@ -3,5 +3,5 @@ import { MachineDescription } from "../event-based-state-machine/MachineDescript
 export const onLog = 'log';
 
 export const LogMachine: MachineDescription = {
-  [onLog]: async (acc, msg) => console.log('LOG: ', msg)
+  [onLog]: async (msg) => console.log('LOG: ', msg)
 };

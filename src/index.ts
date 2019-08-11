@@ -13,14 +13,14 @@ import * as d3 from 'd3';
 const R = require('ramda');
 
 import TimestepDriver, { onTimeStep } from './drivers/TimestepDriver';
-import KeypressDriver, { onKeyPressed } from './drivers/KeypressDriver';
+import KeypressDriver, { onKeyPressed, onKeyUnpressed } from './drivers/KeypressDriver';
 import {addDrivers} from './drivers/Driver';
-import { MachineDescriptionAdd, MachineDescription } from './event-based-state-machine/MachineDescription';
+import { MachineDescriptionAdd, MachineDescription } from './state-machine/MachineDescription';
 import { LogMachine, onLog } from './machines/LogMachine';
-import { Send, Series, Add, Effect } from './event-based-state-machine/MachineResponse';
-import { Machine } from './event-based-state-machine/Machine';
+import { Send, Series, Add, Effect } from './state-machine/MachineResponse';
+import { Machine } from './state-machine/Machine';
 import { wait } from './util';
-import { SequenceMachine } from './event-based-state-machine/Engineers';
+import { SequenceMachine } from './state-machine/Engineers';
 
 
 ////////////////////////
@@ -37,6 +37,24 @@ const svg = d3.select('body')
   .attr('viewBox', viewBox({
     minX: 0, minY: 0, width, height
   }));
+
+const dialogue = svg
+  .append('text')
+  .attr('class', '.dialogue')
+  .attr('x', width / 2)
+  .attr('y', height * .9)
+  .attr('text-anchor', 'middle');
+
+type DialogueSelection = d3.Selection<SVGTextElement, any, HTMLElement, any>;
+const makeShowDialgoue = (sel: DialogueSelection) => (text: string) => Series(
+  Effect(() => sel.style('opacity', 0)),
+  Effect(() => sel.text(text)),
+  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 1)),
+  wait(2000),
+  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 0)),
+);
+
+const ShowDialogue = makeShowDialgoue(dialogue);
 
 const rand = d3.randomUniform(0, 100);
 const sample = d3.range(0.15 * 100)
@@ -92,15 +110,6 @@ const updateMouseForce = (x: number, y: number) => {
 let mousePos = [width / 2, height / 2];
 d3.select('svg')
   .on('mousemove', () => {
-    const newMousePos = [d3.event.pageX, d3.event.pageY];
-
-    if (newMousePos[0] === mousePos[0] &&
-        newMousePos[1] === mousePos[1]) {
-      // simulation.alphaDecay(.1);
-    } else {
-      // simulation.alpha(1);
-    }
-
     mousePos = [d3.event.pageX, d3.event.pageY];
 
     updateMouseForce(mousePos[0], mousePos[1]);
@@ -120,30 +129,6 @@ const simulation = d3.forceSimulation(nodeData)
   });
 
 
-// const machine = Machine(
-//   MachineDescriptionAdd(
-//     {
-//       [onTimeStep]: async (mach, msg) => Send(onLog, msg),
-//       [onKeyPressed()]: Send(onLog, `generic code`),
-//       [onKeyPressed('Space')]: Series(
-//         wait(1000),
-//         Effect(() => {
-//           alert('hi there');
-//         }),
-//         Send(onLog, 'logging after 1000'),
-//         Add({
-//           [onKeyPressed('KeyF')]: Send(onLog, 'logging after keyf')
-//         }),
-//         wait(1000),
-//         Effect(() => {
-//           console.log('hi there');
-//         }),
-//       )
-//     },
-//     LogMachine
-//   )
-// );
-
 type D3Transition = d3.Transition<any, any, any, any>;
 const transitionP = (trans: D3Transition): Promise<void> => (
   new Promise(resolve => (
@@ -157,41 +142,25 @@ const TransitionEffect = (transF: () => D3Transition) => (
   ))
 );
 
-const dialogue = svg
-  .append('text')
-  .attr('class', '.dialogue')
-  .attr('x', width / 2)
-  .attr('y', height * .9)
-  .attr('text-anchor', 'middle');
-
-type DialogueSelection = d3.Selection<SVGTextElement, any, HTMLElement, any>;
-const makeShowDialgoue = (sel: DialogueSelection) => (text: string) => Series(
-  Effect(() => sel.style('opacity', 0)),
-  Effect(() => sel.text(text)),
-  // is brokeded
-  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 1)),
-  wait(2000),
-  TransitionEffect(() => sel.transition().duration(1000).style('opacity', 0)),
-  // Effect(() => new Promise(resolve => sel.transition().duration(1000).style('opacity', 1).on('end', () => {console.log('resolve 1'); resolve();}))),
-  // Effect(() => new Promise(resolve => sel.transition().duration(1000).delay(0).style('opacity', 0).on('end', () => {console.log('resolve 2'); resolve();}))),
-);
-
-const ShowDialogue = makeShowDialgoue(dialogue);
-
-
-const wasdMachine: MachineDescription = {
+const SwarmControllerMachine: MachineDescription = {
   [onKeyPressed('KeyW')]: Send('move-swarm', 'up'),
   [onKeyPressed('KeyA')]: Send('move-swarm', 'left'),
   [onKeyPressed('KeyS')]: Send('move-swarm', 'down'),
   [onKeyPressed('KeyD')]: Send('move-swarm', 'right'),
+  [onKeyPressed('KeyP')]: Send('pause-swarm'),
+  [onKeyUnpressed('KeyP')]: Send('unpause-swarm'),
 };
 
-const swarmMachine: MachineDescription = {
-  [onKeyPressed('KeyP')]: Send('toggle-swarm'),
-  'toggle-swarm': Effect(() => {
-    simulation.alpha(simulation.alpha() > 0 ? 0 : 1);
+const SwarmMachine: MachineDescription = {
+  'pause-swarm': Effect(() => simulation.alpha(0)),
+  'unpause-swarm': Effect(() => {
+    simulation.alpha(1);
     simulation.restart();
   }),
+  'toggle-swarm': Effect(() => simulation.alpha() > 0
+    ? Send('pause-swarm')
+    : Send('unpause-swarm')
+  ),
   'move-swarm': async (direction: 'up' | 'down' | 'left' | 'right') => {
     const MoveMouseForce = (byX: number, byY: number) => {
       mousePos[0] += byX;
@@ -215,15 +184,17 @@ const IntroMachine: MachineDescription = {
   'intro-start': ShowDialogue('Welcome to the Thunderdome')
 };
 
+const IntroController: MachineDescription = {
+  [onKeyPressed('KeyK')]: Send('intro-start')
+};
+
 const machine = Machine(
   MachineDescriptionAdd(
-    swarmMachine,
-    wasdMachine,
+    SwarmMachine,
+    SwarmControllerMachine,
     SequenceMachine([onKeyPressed('Space'), onKeyPressed('KeyF'), onKeyPressed('KeyG')], ShowDialogue('What it is my dog')),
     IntroMachine,
-    {
-      [onKeyPressed('KeyK')]: Send('intro-start')
-    },
+    IntroController,
     LogMachine
   )
 );

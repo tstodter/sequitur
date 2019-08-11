@@ -1,5 +1,5 @@
 import {Driver} from './Driver';
-import {Machine} from '../event-based-state-machine/Machine';
+import {Machine} from '../state-machine/Machine';
 
 export const onTimeStep = 'on-time-step';
 

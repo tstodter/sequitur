@@ -1,5 +1,5 @@
 {
-  "name": "starter-template",
+  "name": "sequitur",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -9,7 +9,7 @@
     "build": "tsc",
     "prestart": "npm run build"
   },
-  "author": "",
+  "author": "Travis Stodter",
   "license": "ISC",
   "dependencies": {
     "@types/d3": "^5.7.2",

@@ -1,4 +1,4 @@
-import { Machine } from "../event-based-state-machine/Machine";
+import { Machine } from "../state-machine/Machine";
 
 export type Driver = {
   engage: () => void;

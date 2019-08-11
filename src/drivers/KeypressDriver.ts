@@ -1,5 +1,5 @@
 import {Driver} from './Driver';
-import {Machine} from '../event-based-state-machine/Machine';
+import {Machine} from '../state-machine/Machine';
 
 export const onKeyPressed = (code?: string) => (
   !!code
@@ -13,24 +13,49 @@ export const onKeyUnpressed = (code?: string) => (
     : 'onKeyUnpressed'
 );
 
-export type GenericKeypressedMessage = string;
-type GenericKeypressedEvent = [
+type KeysToTime = {[k: string]: number};
+
+export type GenericKeyPressedMessage = KeysToTime;
+type GenericKeyPressedEvent = [
   string,
-  GenericKeypressedMessage
+  GenericKeyPressedMessage
 ];
-const GenericKeypressedEvent = (code: string): GenericKeypressedEvent => ([
+const GenericKeyPressedEvent = (codes: KeysToTime): GenericKeyPressedEvent => ([
   onKeyPressed(),
-  code
+  codes
 ]);
 
-export type SpecificKeypressedMessage = number;
-type SpecificKeypressedEvent = [
+export type SpecificKeyPressedMessage = number;
+type SpecificKeyPressedEvent = [
   string,
-  SpecificKeypressedMessage
+  SpecificKeyPressedMessage
 ];
-const SpecificKeypressedEvent = (code: string): SpecificKeypressedEvent => ([
+const SpecificKeyPressedEvent = (code: string, time: number): SpecificKeyPressedEvent => ([
   onKeyPressed(code),
-  performance.now()
+  time
+]);
+
+export type GenericKeyUnpressedMessage = [string, number];
+type GenericKeyUnpressedEvent = [
+  string,
+  GenericKeyUnpressedMessage
+];
+const GenericKeyUnpressedEvent = (code: string, time: number): GenericKeyUnpressedEvent => ([
+  onKeyUnpressed(),
+  [
+    code,
+    time
+  ]
+]);
+
+export type SpecificKeyUnpressedMessage = number;
+type SpecificKeyUnpressedEvent = [
+  string,
+  SpecificKeyUnpressedMessage
+];
+const SpecificKeyUnpressedEvent = (code: string, time: number): SpecificKeyUnpressedEvent => ([
+  onKeyUnpressed(code),
+  time
 ]);
 
 const KeypressDriver = (
@@ -38,22 +63,33 @@ const KeypressDriver = (
 ): Driver => {
   let shouldContinue = true;
 
-  const keyPresses: {[k: string]: boolean} = {};
+  const keyPresses: {[k: string]: number} = {};
 
   window.addEventListener('keydown', (evt: KeyboardEvent) => {
-    keyPresses[evt.code] = true;
+    if (!keyPresses[evt.code])
+      keyPresses[evt.code] = performance.now();
   });
 
   window.addEventListener('keyup', (evt: KeyboardEvent) => {
     delete keyPresses[evt.code];
+
+    const now = performance.now();
+    machine.send(...SpecificKeyUnpressedEvent(evt.code, now));
+    machine.send(...GenericKeyUnpressedEvent(evt.code, now));
   });
 
   return {
     engage: () => {
       const onAnimationFrame = () => {
-        Object.keys(keyPresses).forEach(k => {
-          machine.send(...SpecificKeypressedEvent(k));
+        const keysBeingPressed = Object.keys(keyPresses);
+
+        keysBeingPressed.forEach(k => {
+          machine.send(...SpecificKeyPressedEvent(k, keyPresses[k]));
         });
+
+        if (keysBeingPressed.length > 0) {
+          machine.send(...GenericKeyPressedEvent(keyPresses));
+        }
 
         if (shouldContinue) {
           window.requestAnimationFrame(onAnimationFrame);

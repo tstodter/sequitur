@@ -1,4 +1,4 @@
-import { MachineDescription } from "../event-based-state-machine/MachineDescription";
+import { MachineDescription } from "../state-machine/MachineDescription";
 
 export const onLog = 'log';
 

@@ -4,7 +4,7 @@
 // - let machine descriptions have non-promise returning functions
 // - remove acc from responders
 - Parallel-ize machine adds
-- include plain function in responder, along with machineResponses
+// - include plain function in responder, along with machineResponses
 - add subtraction response
 - remove val response
 */
@@ -17,7 +17,7 @@ import KeypressDriver, { onKeyPressed } from './drivers/KeypressDriver';
 import {addDrivers} from './drivers/Driver';
 import { MachineDescriptionAdd, MachineDescription } from './event-based-state-machine/MachineDescription';
 import { LogMachine, onLog } from './machines/LogMachine';
-import { Val, Send, Series, Add, Effect } from './event-based-state-machine/MachineResponse';
+import { Send, Series, Add, Effect } from './event-based-state-machine/MachineResponse';
 import { Machine } from './event-based-state-machine/Machine';
 import { wait } from './util';
 import { SequenceMachine } from './event-based-state-machine/Engineers';

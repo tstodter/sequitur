@@ -7,7 +7,7 @@ export type MachineResponse =
   | void;
 
 export type PlainMachineResponse =
-  | Add | Val | Send | Effect
+  | Add | Send | Effect
   | Series | Parallel;
 
 export type MachineResponsePromise =
@@ -27,15 +27,6 @@ export type Add = {
 export const Add = (desc: MachineDescription): Add => ({
   kind: 'add',
   operand: desc
-});
-
-export type Val = {
-  kind: 'val';
-  val: any;
-};
-export const Val = (val: any): Val => ({
-  kind: 'val',
-  val
 });
 
 export type Send = {
@@ -85,9 +76,6 @@ const isMachineResponseF = (res: MachineResponse): res is MachineResponseF => (
 const isPlainMachineResponse = (res: MachineResponse): res is PlainMachineResponse => (
   !!res && !isMachineResponsePromise(res) && !isMachineResponseF(res)
 );
-const isVal = (res: MachineResponse): res is Val => (
-  isPlainMachineResponse(res) && res.kind === 'val'
-);
 const isAdd = (res: MachineResponse): res is Add => (
   isPlainMachineResponse(res) && res.kind === 'add'
 );
@@ -108,7 +96,6 @@ export const typeguards = {
   isMachineResponsePromise,
   isMachineResponseF,
   isPlainMachineResponse,
-  isVal,
   isAdd,
   isSend,
   isEffect,

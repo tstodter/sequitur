@@ -1,6 +1,6 @@
 const R = require('ramda');
 import { MachineDescription } from "./MachineDescription";
-import { Add, Series, Val, MachineResponse, PlainMachineResponse, MachineResponseF, typeguards } from "./MachineResponse";
+import { Add, Series, MachineResponse, PlainMachineResponse, MachineResponseF, typeguards } from "./MachineResponse";
 
 type SequenceMachine = (
   events: Array<string>,
@@ -12,7 +12,7 @@ export const SequenceMachine: SequenceMachine = (events, handler) => {
     [events[0]]: async (msg: any) => {
       const deleteLastEvent = !!lastEvent
         ? Add({
-          [lastEvent]: Val('deleted')
+          [lastEvent]: () => {}
         })
         : undefined;
 
@@ -21,7 +21,7 @@ export const SequenceMachine: SequenceMachine = (events, handler) => {
       return events.length === 1
         ? Series(
             Add({
-              [events[0]]: Val('deleted')
+              [events[0]]: () => {}
             }),
             typeguards.isMachineResponseF(handler)
               ? await handler(msgsSoFar)

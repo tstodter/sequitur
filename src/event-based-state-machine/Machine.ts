@@ -24,12 +24,6 @@ export const Machine = (desc: MachineDescription): Machine => {
   };
 
   const handleResponse = async (res: MachineResponse): Promise<any | MachineDescription> => {
-    debugger;
-    if (tg.isVal(res)) {
-      // console.log('-----', 'handling', res.kind, res.val);
-      return res.val;
-    }
-    else
     if (tg.isAdd(res)) {
       // console.log('-----', 'handling', res.kind, Object.keys(res.operand));
 
@@ -42,7 +36,7 @@ export const Machine = (desc: MachineDescription): Machine => {
     }
     else
     if (tg.isSend(res)) {
-      console.log('-----', 'sending', res.name, res.message);
+      // console.log('-----', 'sending', res.name, res.message);
 
       const eventName = res.name;
       const msg = res.message;

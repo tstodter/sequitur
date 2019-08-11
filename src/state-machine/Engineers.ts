@@ -1,6 +1,7 @@
 const R = require('ramda');
 import { MachineDescription } from "./MachineDescription";
-import { Add, Series, MachineResponse, PlainMachineResponse, MachineResponseF, typeguards, Subtract } from "./MachineResponse";
+import { Add, Series, MachineResponse, PlainMachineResponse, MachineResponseF, typeguards, Subtract, Try } from "./MachineResponse";
+import { Machine } from "./Machine";
 
 type SequenceMachine = (
   events: Array<string>,
@@ -42,4 +43,13 @@ export const SequenceMachine: SequenceMachine = (allEvents, handler) => {
   };
 
   return SeqHelper(allEvents, []);
+};
+
+type FallbackMachine = (
+  tryMachine: MachineDescription,
+  fallback: MachineDescription
+) => MachineDescription;
+
+export const FallbackMachine: FallbackMachine = (tryMachine, fallback) => {
+  return R.mergeWith(Try)(tryMachine, fallback);
 };

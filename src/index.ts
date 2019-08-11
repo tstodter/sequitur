@@ -3,10 +3,10 @@
 // - Fix brokedness
 // - let machine descriptions have non-promise returning functions
 // - remove acc from responders
-- Parallel-ize machine adds
+// - Parallel-ize machine adds
 // - include plain function in responder, along with machineResponses
-- add subtraction response
-- remove val response
+// - add subtraction response
+// - remove val response
 */
 
 import * as d3 from 'd3';
@@ -17,10 +17,10 @@ import KeypressDriver, { onKeyPressed, onKeyUnpressed, LetterDriver, WhitespaceD
 import {addDrivers} from './drivers/Driver';
 import { MachineDescriptionAdd, MachineDescription, MachineDescriptionSubtract } from './state-machine/MachineDescription';
 import { LogMachine, onLog } from './machines/LogMachine';
-import { Send, Series, Add, Effect } from './state-machine/MachineResponse';
+import { Send, Series, Add, Effect, Try } from './state-machine/MachineResponse';
 import { Machine } from './state-machine/Machine';
 import { wait } from './util';
-import { SequenceMachine } from './state-machine/Engineers';
+import { SequenceMachine, FallbackMachine } from './state-machine/Engineers';
 
 
 ////////////////////////
@@ -190,6 +190,30 @@ const IntroController: MachineDescription = {
   [onKeyPressed('KeyK')]: Send('intro-start')
 };
 
+const ErrorMachine: MachineDescription = {
+  [onKeyUnpressed('KeyT')]: Try(
+    Effect(() => {
+      throw 'bad news bears hombre';
+    }),
+    async (err) => ShowDialogue(err)
+  )
+};
+
+const ErrorMachine2: MachineDescription = MachineDescriptionAdd(
+  {[onKeyUnpressed('KeyY')]: Send('start-error')},
+  FallbackMachine(
+    {
+      ['start-error']: Send('continue-error'),
+      ['continue-error']: Send('throw-error'),
+      ['throw-error']: Effect(() => { throw 'ehhhhhhh'; })
+    },
+    {
+      ['start-error']: ShowDialogue('this will never show'),
+      ['continue-error']: ShowDialogue
+    }
+  )
+);
+
 const machine = Machine(
   MachineDescriptionAdd(
     SwarmMachine,
@@ -201,7 +225,9 @@ const machine = Machine(
     ], ShowDialogue('What it is my dog')),
     IntroMachine,
     IntroController,
-    LogMachine
+    LogMachine,
+    ErrorMachine,
+    ErrorMachine2
   )
 );
 

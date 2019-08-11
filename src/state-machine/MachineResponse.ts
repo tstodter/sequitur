@@ -9,7 +9,7 @@ export type MachineResponse =
   | void;
 
 export type PlainMachineResponse =
-  | Add | Subtract | Send | Effect
+  | Add | Subtract | Send | Effect | Try
   | Series | Parallel;
 
 export type MachineResponsePromise =
@@ -60,6 +60,17 @@ export const Effect = (effect: () => void): Effect => ({
   effect
 });
 
+export type Try = {
+  kind: 'try';
+  try: MachineResponse;
+  failure: MachineResponse;
+};
+export const Try = (toTry: MachineResponse, onFailure: MachineResponse): Try => ({
+  kind: 'try',
+  try: toTry,
+  failure: onFailure
+});
+
 export type Series = {
   kind: 'series';
   responses: Array<MachineResponse>
@@ -107,6 +118,9 @@ const isSend = (res: MachineResponse): res is Send => (
 const isEffect = (res: MachineResponse): res is Effect => (
   isPlainMachineResponse(res) && res.kind === 'effect'
 );
+const isTry = (res: MachineResponse): res is Try => (
+  isPlainMachineResponse(res) && res.kind === 'try'
+);
 const isSeries = (res: MachineResponse): res is Series => (
   isPlainMachineResponse(res) && res.kind === 'series'
 );
@@ -122,6 +136,7 @@ export const typeguards = {
   isSubtract,
   isSend,
   isEffect,
+  isTry,
   isSeries,
   isParallel
 };
@@ -156,6 +171,7 @@ export const match = <T>(
   onAdd     : (_: Add) => T,
   onSubtract: (_: Subtract) => T,
   onEffect  : (_: Effect) => T,
+  onTry     : (_: Try) => T,
   onSend    : (_: Send) => T,
   onSeries  : (_: Series) => T,
   onParallel: (_: Parallel) => T
@@ -168,6 +184,7 @@ export const match = <T>(
     case 'add'     : return onAdd(res);
     case 'subtract': return onSubtract(res);
     case 'effect'  : return onEffect(res);
+    case 'try'     : return onTry(res);
     case 'send'    : return onSend(res);
     case 'series'  : return onSeries(res);
     case 'parallel': return onParallel(res);

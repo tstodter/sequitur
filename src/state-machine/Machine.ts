@@ -17,6 +17,7 @@ import {
   Series,
   Parallel,
   Subtract,
+  Try,
 } from './MachineResponse';
 
 export type Machine = {
@@ -51,9 +52,18 @@ export const Machine = (desc: MachineDescription): Machine => {
         res.operand
       );
       console.log('-----', machine.desc);
-
     },
     async (res: Effect) => res.effect(),
+    async (res: Try) => {
+      try {
+        return await handleResponse(res.try);
+      } catch (e) {
+        if (tg.isMachineResponseF(res.failure)) {
+          return handleResponse(await res.failure(e));
+        }
+        return handleResponse(res.failure);
+      }
+    },
     async (res: Send) => {
       console.log('-----', 'sending', res.name, res.message);
       const eventName = res.name;

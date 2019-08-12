@@ -18,6 +18,7 @@ import {
   Subtract,
   Try,
   isMachineResponseF,
+  isParallel,
 } from './MachineResponse';
 
 export type Machine = {
@@ -43,7 +44,7 @@ export const Machine = (desc: Blueprint): Machine => {
         machine.desc,
         res.operand
       );
-      console.log('-----', machine.desc);
+      console.log('+++', machine.desc);
 
     },
     async (res: Subtract) => {
@@ -51,7 +52,7 @@ export const Machine = (desc: Blueprint): Machine => {
         machine.desc,
         res.operand
       );
-      console.log('-----', machine.desc);
+      console.log('---', machine.desc);
     },
     async (res: Effect) => res.effect(),
     async (res: Try) => {
@@ -65,18 +66,25 @@ export const Machine = (desc: Blueprint): Machine => {
       }
     },
     async (res: Send) => {
-      console.log('-----', 'sending', res.name, res.message);
+      // console.log('-----', 'sending', res.name, res.message);
       const eventName = res.name;
       const msg = res.message;
 
       if (R.has(eventName, machine.desc)) {
-        let handler = machine.desc[eventName];
+        const invokeHandler = async (handler: MachineResponse): Promise<void> => {
+          if (isMachineResponseF(handler)) {
+            return invokeHandler(await handler(msg));
+          }
+          else
+          if (isParallel(handler)) {
+            await Promise.all(handler.responses.map(invokeHandler));
+          }
+          else {
+            return handleResponse(handler);
+          }
+        };
 
-        if (isMachineResponseF(handler)) {
-          return handleResponse(await handler(msg));
-        } else {
-          return handleResponse(handler);
-        }
+        return await invokeHandler(machine.desc[eventName]);
       }
     },
     async (res: Series) => {

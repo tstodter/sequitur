@@ -1,15 +1,30 @@
+/*  TODO
+
+- Convert SequenceMachine to SingletonSequenceMachine
+- Write arbitrary, non-deleting SequenceMachine
+- Write Assertion?Machine for arbitrarily ordered events
+  - this will required tag-unioned messages to differentiate between
+    events
+  - Might be tough to do that for non-ts'ed code
+  - ~~Union generator? Give it messages and it tags them?~~
+  - just use [{kind: eventName, msg: msg}]
+
+
+-
+*/
+
 import * as d3 from 'd3';
 const R = require('ramda');
 
 import TimestepDriver, { onTimeStep } from './drivers/TimestepDriver';
-import KeypressDriver, { onKeyPressed, onKeyUnpressed, LetterDriver, WhitespaceDriver } from './drivers/KeypressDriver';
+import KeypressDriver, { onKeyPressed, onKeyUp, LetterDriver, WhitespaceDriver, onKeyDown } from './drivers/KeypressDriver';
 import {AddDrivers} from './drivers/Driver';
 import { BlueprintAdd, Blueprint, BlueprintSubtract2 } from './state-machine/Blueprint';
 import { logMachine, onLog } from './machines/LogMachine';
 import { Send, Series, Add, Effect, Try, MachineResponseF } from './state-machine/MachineResponse';
 import { Machine } from './state-machine/Machine';
 import { wait } from './util';
-import { SequenceMachine, FallbackMachine } from './state-machine/engineers';
+import { SingletonSequenceMachine, NonSingletonSequenceMachine, FallbackMachine } from './state-machine/engineers';
 
 ////////////////////////
 const width = window.innerWidth;
@@ -132,14 +147,19 @@ const TransitionEffect = (transF: () => D3Transition) => (
   ))
 );
 
-const swarmControllerMachine: Blueprint = {
+const swarmControllerMachine: Blueprint = BlueprintAdd({
   [onKeyPressed('KeyW')]: Send('move-swarm', 'up'),
   [onKeyPressed('KeyA')]: Send('move-swarm', 'left'),
   [onKeyPressed('KeyS')]: Send('move-swarm', 'down'),
   [onKeyPressed('KeyD')]: Send('move-swarm', 'right'),
-  [onKeyPressed('KeyP')]: Send('pause-swarm'),
-  [onKeyUnpressed('KeyP')]: Send('unpause-swarm'),
-};
+  [onKeyDown('KeyP')]: t => Send('pause-swarm', t),
+  [onKeyUp('KeyP')]: t => Send('unpause-swarm', t),
+},
+  SingletonSequenceMachine([
+    'pause-swarm',
+    'unpause-swarm'
+  ], ([t1, t2]: [number, number]) => ShowDialogue(`paused for ${t2 - t1}ms`))
+);
 
 const swarmMachine: Blueprint = {
   'pause-swarm': Effect(() => simulation.alpha(0)),
@@ -175,11 +195,11 @@ const introMachine: Blueprint = {
 };
 
 const introController: Blueprint = {
-  [onKeyPressed('KeyK')]: Send('intro-start')
+  [onKeyDown('KeyK')]: Send('intro-start')
 };
 
 const errorMachine: Blueprint = {
-  [onKeyUnpressed('KeyT')]: Try(
+  [onKeyUp('KeyT')]: Try(
     Effect(() => {
       throw 'bad news bears hombre';
     }),
@@ -188,7 +208,7 @@ const errorMachine: Blueprint = {
 };
 
 const errorMachine2: Blueprint = BlueprintAdd(
-  {[onKeyUnpressed('KeyY')]: Send('start-error')},
+  {[onKeyUp('KeyY')]: Send('start-error')},
   FallbackMachine(
     {
       ['start-error']: Send('continue-error'),
@@ -206,11 +226,20 @@ const machine = Machine(
   BlueprintAdd(
     swarmMachine,
     swarmControllerMachine,
-    SequenceMachine([
-      onKeyPressed('Space'),
-      onKeyPressed('KeyF'),
-      onKeyPressed('KeyG')
-    ], ShowDialogue('What it is my dog')),
+    SingletonSequenceMachine([
+      onKeyDown('Space'),
+      onKeyDown('KeyF'),
+      onKeyDown('KeyG')
+    ], msg => {
+      console.log(msg);
+      return ShowDialogue('What it is my dog');
+    }),
+    NonSingletonSequenceMachine([
+      onKeyDown('Enter'),
+      onKeyDown('Enter')
+    ], ([t1, t2]: [number, number]) => (
+      ShowDialogue(`Time between Enters: ${Math.floor(t2 - t1) / 1000}s`)
+    )),
     introMachine,
     introController,
     logMachine,

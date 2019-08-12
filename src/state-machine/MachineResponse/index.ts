@@ -53,9 +53,15 @@ export const AddMachineResponse = Parallel;
 export const SubtractMachineResponse = (a: MachineResponse, b: MachineResponse): MachineResponse => {
   if (isParallel(a)) {
     if (isParallel(b)) {
-      return Parallel(R.without(b.responses, a.responses));
+      const withBRemoved = R.without(b.responses, a.responses);
+      return withBRemoved.length > 0
+        ? Parallel(withBRemoved)
+        : undefined;
     } else {
-      return Parallel(R.without([b], a.responses));
+      const withBRemoved = R.without([b], a.responses);
+      return withBRemoved.length > 0
+        ? Parallel(withBRemoved)
+        : undefined;
     }
   } else {
     if (isParallel(b)) {

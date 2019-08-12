@@ -7,10 +7,16 @@ export const onKeyPressed = (code?: string) => (
     : 'onKeyPressed'
 );
 
-export const onKeyUnpressed = (code?: string) => (
+export const onKeyDown = (code?: string) => (
   !!code
-    ? `onKeyUnpressed-${code}`
-    : 'onKeyUnpressed'
+    ? `onKeyDown-${code}`
+    : 'onKeyDown'
+);
+
+export const onKeyUp = (code?: string) => (
+  !!code
+    ? `onKeyUp-${code}`
+    : 'onKeyUp'
 );
 
 type KeysToTime = {[k: string]: number};
@@ -35,26 +41,49 @@ const SpecificKeyPressedEvent = (code: string, time: number): SpecificKeyPressed
   time
 ]);
 
-export type GenericKeyUnpressedMessage = [string, number];
-type GenericKeyUnpressedEvent = [
+export type GenericKeyDownMessage = [string, number];
+type GenericKeyDownEvent = [
   string,
-  GenericKeyUnpressedMessage
+  GenericKeyDownMessage
 ];
-const GenericKeyUnpressedEvent = (code: string, time: number): GenericKeyUnpressedEvent => ([
-  onKeyUnpressed(),
+const GenericKeyDownEvent = (code: string, time: number): GenericKeyDownEvent => ([
+  onKeyDown(),
   [
     code,
     time
   ]
 ]);
 
-export type SpecificKeyUnpressedMessage = number;
-type SpecificKeyUnpressedEvent = [
+export type SpecificKeyDownMessage = number;
+type SpecificKeyDownEvent = [
   string,
-  SpecificKeyUnpressedMessage
+  SpecificKeyDownMessage
 ];
-const SpecificKeyUnpressedEvent = (code: string, time: number): SpecificKeyUnpressedEvent => ([
-  onKeyUnpressed(code),
+const SpecificKeyDownEvent = (code: string, time: number): SpecificKeyDownEvent => ([
+  onKeyDown(code),
+  time
+]);
+
+export type GenericKeyUpMessage = [string, number];
+type GenericKeyUpEvent = [
+  string,
+  GenericKeyUpMessage
+];
+const GenericKeyUpEvent = (code: string, time: number): GenericKeyUpEvent => ([
+  onKeyUp(),
+  [
+    code,
+    time
+  ]
+]);
+
+export type SpecificKeyUpMessage = number;
+type SpecificKeyUpEvent = [
+  string,
+  SpecificKeyUpMessage
+];
+const SpecificKeyUpEvent = (code: string, time: number): SpecificKeyUpEvent => ([
+  onKeyUp(code),
   time
 ]);
 
@@ -72,6 +101,10 @@ const KeypressDriver = (
     if (keys.length === 0 || keysToWatch.has(evt.code)) {
       if (!keyPresses[evt.code]) {
         keyPresses[evt.code] = performance.now();
+
+        const now = performance.now();
+        machine.send(...SpecificKeyDownEvent(evt.code, now));
+        machine.send(...GenericKeyDownEvent(evt.code, now));
       }
     }
   });
@@ -81,8 +114,8 @@ const KeypressDriver = (
       delete keyPresses[evt.code];
 
       const now = performance.now();
-      machine.send(...SpecificKeyUnpressedEvent(evt.code, now));
-      machine.send(...GenericKeyUnpressedEvent(evt.code, now));
+      machine.send(...SpecificKeyUpEvent(evt.code, now));
+      machine.send(...GenericKeyUpEvent(evt.code, now));
     }
   });
 

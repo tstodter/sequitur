@@ -1,14 +1,13 @@
 const R = require('ramda');
 
 import {
-  MachineDescription,
-  MachineDescriptionAdd2,
-  MachineDescriptionSubtract
-} from './MachineDescription';
+  Blueprint,
+  BlueprintAdd2,
+  BlueprintSubtract2
+} from './Blueprint';
 import {
   MachineResponse,
   Send,
-  typeguards as tg,
   match,
   MachineResponseF,
   MachineResponsePromise,
@@ -18,15 +17,16 @@ import {
   Parallel,
   Subtract,
   Try,
+  isMachineResponseF,
 } from './MachineResponse';
 
 export type Machine = {
   kind: 'machine';
   send: (eventName: string, msg: any) => Promise<void>;
-  desc: MachineDescription
+  desc: Blueprint
 };
 
-export const Machine = (desc: MachineDescription): Machine => {
+export const Machine = (desc: Blueprint): Machine => {
   const machine: Machine = {
     desc: R.clone(desc),
     kind: 'machine',
@@ -39,7 +39,7 @@ export const Machine = (desc: MachineDescription): Machine => {
     async (res: MachineResponsePromise) => handleResponse(await res),
     async (res: MachineResponseF) => handleResponse(res()),
     async (res: Add) => {
-      machine.desc = MachineDescriptionAdd2(
+      machine.desc = BlueprintAdd2(
         machine.desc,
         res.operand
       );
@@ -47,7 +47,7 @@ export const Machine = (desc: MachineDescription): Machine => {
 
     },
     async (res: Subtract) => {
-      machine.desc = MachineDescriptionSubtract(
+      machine.desc = BlueprintSubtract2(
         machine.desc,
         res.operand
       );
@@ -58,7 +58,7 @@ export const Machine = (desc: MachineDescription): Machine => {
       try {
         return await handleResponse(res.try);
       } catch (e) {
-        if (tg.isMachineResponseF(res.failure)) {
+        if (isMachineResponseF(res.failure)) {
           return handleResponse(await res.failure(e));
         }
         return handleResponse(res.failure);
@@ -72,7 +72,7 @@ export const Machine = (desc: MachineDescription): Machine => {
       if (R.has(eventName, machine.desc)) {
         let handler = machine.desc[eventName];
 
-        if (tg.isMachineResponseF(handler)) {
+        if (isMachineResponseF(handler)) {
           return handleResponse(await handler(msg));
         } else {
           return handleResponse(handler);

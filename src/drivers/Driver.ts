@@ -7,7 +7,7 @@ export type Driver = {
 
 export type DriverConstructor = (machine: Machine) => Driver;
 
-export const addDrivers = (...driverCons: Array<DriverConstructor>): DriverConstructor =>
+export const AddDrivers = (...driverCons: Array<DriverConstructor>): DriverConstructor =>
   (machine: Machine) => {
     const drivers = driverCons.map(con => con(machine));
 

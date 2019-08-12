@@ -1,7 +1,7 @@
-import { MachineDescription } from "../state-machine/MachineDescription";
+import { Blueprint } from "../state-machine/Blueprint";
 
 export const onLog = 'log';
 
-export const LogMachine: MachineDescription = {
+export const logMachine: Blueprint = {
   [onLog]: async (msg) => console.log('LOG: ', msg)
 };

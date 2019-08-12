@@ -51,36 +51,3 @@ const TimestepDriver = (
 };
 
 export default TimestepDriver;
-
-// const makeTimeStampHandler = (x: number) => async (acc: MachineDescription, msg: any): Promise<MachineResponse> => {
-//   const {delta, progress} = msg as TimestepMessage;
-//   // console.log(onTimeStep, x, delta, progress);
-
-//   if (progress >= 10000) {
-//     console.log('stopping', x);
-//     driver.stop();
-//     console.log(acc);
-//   }
-
-//   return Series([
-//     wait(3000),
-//     Add({
-//       ['log']: async (acc, msg) => console.log('&&', msg)
-//     }),
-//     Send('log', [x, 'hi there travis']),
-//     Series([
-//       wait(3000),
-//       Add({
-//         ['log']: async (acc, msg) => console.log('', msg)
-//       }),
-//       Send('log', [x, 'hi there travis']),
-//       Series([
-//         wait(3000),
-//         Add({
-//           ['log']: async (acc, msg) => console.log('&&', msg)
-//         }),
-//         Send('log', [x, 'hi there travis']),
-//       ])
-//     ])
-//   ]);
-// };

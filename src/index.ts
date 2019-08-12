@@ -1,27 +1,15 @@
-// TODO
-/*
-// - Fix brokedness
-// - let machine descriptions have non-promise returning functions
-// - remove acc from responders
-// - Parallel-ize machine adds
-// - include plain function in responder, along with machineResponses
-// - add subtraction response
-// - remove val response
-*/
-
 import * as d3 from 'd3';
 const R = require('ramda');
 
 import TimestepDriver, { onTimeStep } from './drivers/TimestepDriver';
 import KeypressDriver, { onKeyPressed, onKeyUnpressed, LetterDriver, WhitespaceDriver } from './drivers/KeypressDriver';
-import {addDrivers} from './drivers/Driver';
-import { MachineDescriptionAdd, MachineDescription, MachineDescriptionSubtract } from './state-machine/MachineDescription';
-import { LogMachine, onLog } from './machines/LogMachine';
-import { Send, Series, Add, Effect, Try } from './state-machine/MachineResponse';
+import {AddDrivers} from './drivers/Driver';
+import { BlueprintAdd, Blueprint, BlueprintSubtract2 } from './state-machine/Blueprint';
+import { logMachine, onLog } from './machines/LogMachine';
+import { Send, Series, Add, Effect, Try, MachineResponseF } from './state-machine/MachineResponse';
 import { Machine } from './state-machine/Machine';
 import { wait } from './util';
-import { SequenceMachine, FallbackMachine } from './state-machine/Engineers';
-
+import { SequenceMachine, FallbackMachine } from './state-machine/engineers';
 
 ////////////////////////
 const width = window.innerWidth;
@@ -144,7 +132,7 @@ const TransitionEffect = (transF: () => D3Transition) => (
   ))
 );
 
-const SwarmControllerMachine: MachineDescription = {
+const swarmControllerMachine: Blueprint = {
   [onKeyPressed('KeyW')]: Send('move-swarm', 'up'),
   [onKeyPressed('KeyA')]: Send('move-swarm', 'left'),
   [onKeyPressed('KeyS')]: Send('move-swarm', 'down'),
@@ -153,7 +141,7 @@ const SwarmControllerMachine: MachineDescription = {
   [onKeyUnpressed('KeyP')]: Send('unpause-swarm'),
 };
 
-const SwarmMachine: MachineDescription = {
+const swarmMachine: Blueprint = {
   'pause-swarm': Effect(() => simulation.alpha(0)),
   'unpause-swarm': Effect(() => {
     simulation.alpha(1);
@@ -182,15 +170,15 @@ const SwarmMachine: MachineDescription = {
   }
 };
 
-const IntroMachine: MachineDescription = {
+const introMachine: Blueprint = {
   'intro-start': ShowDialogue('Welcome to the Thunderdome')
 };
 
-const IntroController: MachineDescription = {
+const introController: Blueprint = {
   [onKeyPressed('KeyK')]: Send('intro-start')
 };
 
-const ErrorMachine: MachineDescription = {
+const errorMachine: Blueprint = {
   [onKeyUnpressed('KeyT')]: Try(
     Effect(() => {
       throw 'bad news bears hombre';
@@ -199,7 +187,7 @@ const ErrorMachine: MachineDescription = {
   )
 };
 
-const ErrorMachine2: MachineDescription = MachineDescriptionAdd(
+const errorMachine2: Blueprint = BlueprintAdd(
   {[onKeyUnpressed('KeyY')]: Send('start-error')},
   FallbackMachine(
     {
@@ -215,37 +203,26 @@ const ErrorMachine2: MachineDescription = MachineDescriptionAdd(
 );
 
 const machine = Machine(
-  MachineDescriptionAdd(
-    SwarmMachine,
-    SwarmControllerMachine,
+  BlueprintAdd(
+    swarmMachine,
+    swarmControllerMachine,
     SequenceMachine([
       onKeyPressed('Space'),
       onKeyPressed('KeyF'),
       onKeyPressed('KeyG')
     ], ShowDialogue('What it is my dog')),
-    IntroMachine,
-    IntroController,
-    LogMachine,
-    ErrorMachine,
-    ErrorMachine2
+    introMachine,
+    introController,
+    logMachine,
+    errorMachine,
+    errorMachine2
   )
 );
 
-const machine2 = Machine(
-  MachineDescriptionAdd(
-    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from one')},
-    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from two')},
-    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from three')},
-    {[onKeyUnpressed('KeyK')]: Send(onLog, 'hi from four')},
-    LogMachine
-  )
-);
-
-const driver = addDrivers(
+const driver = AddDrivers(
   // TimestepDriver,
   LetterDriver,
   WhitespaceDriver
 )(machine);
 
 driver.engage();
-console.log(machine2);

@@ -24,7 +24,7 @@ export const BlueprintSubtract2 = (
       if (!!b[eventName]) {
         const subResult = SubtractMachineResponse(a[eventName], b[eventName]);
         if (!!subResult) {
-          descAcc[eventName] = SubtractMachineResponse(a[eventName], b[eventName]);
+          descAcc[eventName] = subResult;
         }
       } else {
         descAcc[eventName] = a[eventName];

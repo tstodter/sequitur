@@ -19,13 +19,33 @@ import {
   Try,
   isMachineResponseF,
   isParallel,
+  PlainMachineResponse,
 } from './MachineResponse';
+import { Once } from './MachineResponse/Once';
 
 export type Machine = {
   kind: 'machine';
   send: (eventName: string, msg: any) => Promise<void>;
   desc: Blueprint
 };
+
+type HandleResponse = (res: MachineResponse) => Promise<void>;
+
+type HandlerInvoker = (recurF: HandlerInvoker, handler: MachineResponse) => Promise<void>;
+
+const invokeHandlerWithMsg: (handleResponse: HandleResponse, msg: any) => HandlerInvoker =
+  (handleResponse, msg: any) => async (recCall: HandlerInvoker, handler: MachineResponse): Promise<void> => {
+    if (isMachineResponseF(handler)) {
+      return recCall(recCall, await handler(msg));
+    }
+    else
+    if (isParallel(handler)) {
+      await Promise.all(handler.responses.map(response => recCall(recCall, response)));
+    }
+    else {
+      return handleResponse(handler);
+    }
+  };
 
 export const Machine = (desc: Blueprint): Machine => {
   const machine: Machine = {
@@ -34,7 +54,13 @@ export const Machine = (desc: Blueprint): Machine => {
     send: async (eventName: string, msg: any) => handleResponse(Send(eventName, msg))
   };
 
-  type HandleResponse = (res: MachineResponse) => Promise<void>;
+  // DANGER WILL ROBINSON
+  // This object is intended to mutate, and should only be touched
+  // from WaitFor functions
+  const waitingFor: {
+    [event: string]: Array<(_: MachineResponse) => void>
+  } = {};
+
   const handleResponse: HandleResponse = match(
     async () => {},
     async (res: MachineResponsePromise) => handleResponse(await res),
@@ -44,7 +70,7 @@ export const Machine = (desc: Blueprint): Machine => {
         machine.desc,
         res.operand
       );
-      console.log('+++', machine.desc);
+      // console.log('+++', machine.desc);
 
     },
     async (res: Subtract) => {
@@ -52,7 +78,7 @@ export const Machine = (desc: Blueprint): Machine => {
         machine.desc,
         res.operand
       );
-      console.log('---', machine.desc);
+      // console.log('---', machine.desc);
     },
     async (res: Effect) => res.effect(),
     async (res: Try) => {
@@ -65,26 +91,36 @@ export const Machine = (desc: Blueprint): Machine => {
         return handleResponse(res.failure);
       }
     },
+    async (res: Once) => {
+      const eventualMsg = new Promise<any>(resolve => {
+        if (res.name in waitingFor) {
+          waitingFor[res.name].push(resolve);
+        } else {
+          waitingFor[res.name] = [resolve];
+        }
+      });
+
+      const msg = await eventualMsg;
+
+      const invokeHandler = invokeHandlerWithMsg(handleResponse, msg);
+      return await invokeHandler(invokeHandler, res.handler);
+    },
     async (res: Send) => {
       // console.log('-----', 'sending', res.name, res.message);
       const eventName = res.name;
       const msg = res.message;
 
-      if (R.has(eventName, machine.desc)) {
-        const invokeHandler = async (handler: MachineResponse): Promise<void> => {
-          if (isMachineResponseF(handler)) {
-            return invokeHandler(await handler(msg));
-          }
-          else
-          if (isParallel(handler)) {
-            await Promise.all(handler.responses.map(invokeHandler));
-          }
-          else {
-            return handleResponse(handler);
-          }
-        };
+      const invokeHandler = invokeHandlerWithMsg(handleResponse, msg);
 
-        return await invokeHandler(machine.desc[eventName]);
+      if (eventName in waitingFor) {
+        const waitingResponses = waitingFor[eventName];
+        delete waitingFor[eventName];
+
+        waitingResponses.forEach(resolve => resolve(res.message));
+      }
+
+      if (R.has(eventName, machine.desc)) {
+        return await invokeHandler(invokeHandler, machine.desc[eventName]);
       }
     },
     async (res: Series) => {

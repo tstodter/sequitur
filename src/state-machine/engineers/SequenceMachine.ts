@@ -2,6 +2,8 @@ const R = require('ramda');
 
 import { Blueprint } from "../Blueprint";
 import { MachineResponse, Series, Subtract, Add, isMachineResponseF } from "../MachineResponse";
+import { Machine } from "../Machine";
+import { Once } from "../MachineResponse/Once";
 
 type SequenceMachine = (
   isSingleton: boolean,
@@ -13,14 +15,11 @@ export const SequenceMachine: SequenceMachine = (isSingleton, allEvents, handler
   const SeqHelper = (
     helperEvents: Array<string>,
     msgAcc: Array<any>,
-    shouldCoverTracks: boolean,
-    lastEvent?: string
+    shouldCoverTracks: boolean
   ): Blueprint => {
     const thisMachine: Blueprint = {
       [helperEvents[0]]: async (msg: any) => {
-        console.log(msg);
         const msgsSoFar = msgAcc.concat(msg);
-        // console.log(msgsSoFar);
 
         const thisMachineRemoval = shouldCoverTracks
           ? Subtract(thisMachine)
@@ -33,7 +32,7 @@ export const SequenceMachine: SequenceMachine = (isSingleton, allEvents, handler
           : undefined;
 
         const nextInSequence = Add(
-          SeqHelper(R.tail(helperEvents), msgsSoFar, true, msg)
+          SeqHelper(R.tail(helperEvents), msgsSoFar, true)
         );
 
         return helperEvents.length === 1
@@ -41,7 +40,7 @@ export const SequenceMachine: SequenceMachine = (isSingleton, allEvents, handler
               thisMachineRemoval,
               sequenceRestart,
               isMachineResponseF(handler)
-                ? await handler(msgsSoFar)
+                ? await handler(...msgsSoFar)
                 : handler
             )
           : Series(
@@ -57,6 +56,34 @@ export const SequenceMachine: SequenceMachine = (isSingleton, allEvents, handler
   const shouldCoverTracks = isSingleton;
   return SeqHelper(allEvents, [], shouldCoverTracks);
 };
+
+export const PreGeneratedNonSingletonSequenceMachine = (
+  allEvents: Array<string>,
+  handler: MachineResponse
+): Blueprint => {
+  return {
+    [allEvents[0]]: (msg) => {
+      const msgs: Array<any> = [msg];
+
+      const addToMsgs = (newMsg: any) => {
+        msgs.push(newMsg);
+      };
+
+      return Series(
+        () => console.log('beginning series'),
+        ...allEvents.slice(1).map((eventName) => (
+          Once(eventName, addToMsgs)
+        )),
+        async () => {
+          return isMachineResponseF(handler)
+            ? handler(...msgs)
+            : handler;
+        }
+      );
+    }
+  }
+}
+
 
 export const SingletonSequenceMachine: (events: Array<string>, handler: MachineResponse) => Blueprint = (
   (allEvents, handler) => SequenceMachine(true, allEvents, handler)

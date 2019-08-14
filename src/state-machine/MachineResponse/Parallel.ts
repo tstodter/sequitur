@@ -2,6 +2,18 @@ const R = require('ramda');
 
 import { MachineResponse, isPlainMachineResponse } from ".";
 
+const flattenResponses = (responses: Array<MachineResponse>): Array<MachineResponse> => {
+  const retArray: Array<MachineResponse> = [];
+  for (let i = 0; i < responses.length; i++) {
+    const res = responses[i];
+    if (isParallel(res))
+      retArray.push(...res.responses);
+    else
+      retArray.push(res);
+  }
+  return retArray;
+};
+
 export type Parallel = {
   kind: 'parallel';
   responses: Array<MachineResponse>
@@ -9,11 +21,7 @@ export type Parallel = {
 
 export const Parallel = (...responses: Array<MachineResponse>): Parallel => ({
   kind: 'parallel',
-  responses: R.chain((res: MachineResponse) => (
-    isParallel(res)
-      ? res.responses
-      : res
-  ))(responses)
+  responses: flattenResponses(responses)
 });
 
 export const isParallel = (res: MachineResponse): res is Parallel => (

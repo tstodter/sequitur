@@ -7,6 +7,8 @@ import { Effect } from './Effect';
 import { Try } from './Try';
 import { Series } from './Series';
 import { Parallel, isParallel } from './Parallel';
+import { Machine } from '../Machine';
+import { Once } from './Once';
 
 export * from './Add';
 export * from './Subtract';
@@ -24,7 +26,7 @@ export type MachineResponse =
 
 export type PlainMachineResponse =
   | Add | Subtract | Send | Effect
-  | Try | Series | Parallel;
+  | Try | Once | Series | Parallel;
 
 export type MachineResponseF =
   (...msg: Array<any>) => MachineResponse;
@@ -50,22 +52,34 @@ export const isPlainMachineResponse = (res: MachineResponse): res is PlainMachin
 
 export const AddMachineResponse = Parallel;
 
+const without = (arr: Array<MachineResponse>, from: Array<MachineResponse>) => {
+  const retArray: Array<MachineResponse> = [];
+
+  for (let i = 0; i < from.length; i++) {
+    if (arr.indexOf(from[i]) === -1) {
+      retArray.push(from[i]);
+    }
+  }
+  return retArray;
+};
+
+// TODO:  The R.without's here are having a significant performance impact
 export const SubtractMachineResponse = (a: MachineResponse, b: MachineResponse): MachineResponse => {
   if (isParallel(a)) {
     if (isParallel(b)) {
-      const withBRemoved = R.without(b.responses, a.responses);
+      const withBRemoved = without(b.responses, a.responses);
       return withBRemoved.length > 0
-        ? Parallel(withBRemoved)
+        ? Parallel(...withBRemoved)
         : undefined;
     } else {
-      const withBRemoved = R.without([b], a.responses);
+      const withBRemoved = without([b], a.responses);
       return withBRemoved.length > 0
-        ? Parallel(withBRemoved)
+        ? Parallel(...withBRemoved)
         : undefined;
     }
   } else {
     if (isParallel(b)) {
-      const withBRemoved: [MachineResponse] = R.without(b.responses, [a]);
+      const withBRemoved: Array<MachineResponse> = without(b.responses, [a]);
       return withBRemoved.length > 0
         ? withBRemoved[0]
         : undefined;
@@ -85,6 +99,7 @@ export const match = <T>(
   onSubtract: (_: Subtract) => T,
   onEffect  : (_: Effect) => T,
   onTry     : (_: Try) => T,
+  onOnce : (_: Once) => T,
   onSend    : (_: Send) => T,
   onSeries  : (_: Series) => T,
   onParallel: (_: Parallel) => T
@@ -98,6 +113,7 @@ export const match = <T>(
     case 'subtract': return onSubtract(res);
     case 'effect'  : return onEffect(res);
     case 'try'     : return onTry(res);
+    case 'once'    : return onOnce(res);
     case 'send'    : return onSend(res);
     case 'series'  : return onSeries(res);
     case 'parallel': return onParallel(res);

@@ -1,14 +1,18 @@
 /*  TODO
 
-- Convert SequenceMachine to SingletonSequenceMachine
-- Write arbitrary, non-deleting SequenceMachine
+// - Convert SequenceMachine to SingletonSequenceMachine
+// - Write arbitrary, non-deleting SequenceMachine
 - Write Assertion?Machine for arbitrarily ordered events
   - this will required tag-unioned messages to differentiate between
     events
   - Might be tough to do that for non-ts'ed code
   - ~~Union generator? Give it messages and it tags them?~~
   - just use [{kind: eventName, msg: msg}]
-
+- The R.without's in MachineResponseSubtract are costly, performance-wise
+  - is it possible to pregenerate a static machine that's equivalent
+    to the dynamic machine, that does not require Subtract's
+  - Will have to label this as special, since combinatorial explosion
+    may be an issue
 
 -
 */
@@ -17,14 +21,16 @@ import * as d3 from 'd3';
 const R = require('ramda');
 
 import TimestepDriver, { onTimeStep } from './drivers/TimestepDriver';
-import KeypressDriver, { onKeyPressed, onKeyUp, LetterDriver, WhitespaceDriver, onKeyDown } from './drivers/KeypressDriver';
+import KeypressDriver, { onKeyPressed, onKeyUp, LetterDriver, WhitespaceDriver, onKeyDown, GenericKeyDownMessage, SpecificKeyDownMessage } from './drivers/KeypressDriver';
 import {AddDrivers} from './drivers/Driver';
 import { BlueprintAdd, Blueprint, BlueprintSubtract2 } from './state-machine/Blueprint';
 import { logMachine, onLog } from './machines/LogMachine';
-import { Send, Series, Add, Effect, Try, MachineResponseF } from './state-machine/MachineResponse';
+import { Send, Series, Add, Effect, Try, MachineResponseF, Parallel } from './state-machine/MachineResponse';
 import { Machine } from './state-machine/Machine';
 import { wait } from './util';
-import { SingletonSequenceMachine, NonSingletonSequenceMachine, FallbackMachine } from './state-machine/engineers';
+import { SingletonSequenceMachine, NonSingletonSequenceMachine, FallbackMachine, PreGeneratedNonSingletonSequenceMachine, SetMachine } from './state-machine/engineers';
+import { WindowMachine } from './state-machine/engineers/WindowMachine';
+import { Once } from './state-machine/MachineResponse/Once';
 
 ////////////////////////
 const width = window.innerWidth;
@@ -147,48 +153,92 @@ const TransitionEffect = (transF: () => D3Transition) => (
   ))
 );
 
-const swarmControllerMachine: Blueprint = BlueprintAdd({
-  [onKeyPressed('KeyW')]: Send('move-swarm', 'up'),
-  [onKeyPressed('KeyA')]: Send('move-swarm', 'left'),
-  [onKeyPressed('KeyS')]: Send('move-swarm', 'down'),
-  [onKeyPressed('KeyD')]: Send('move-swarm', 'right'),
-  [onKeyDown('KeyP')]: t => Send('pause-swarm', t),
-  [onKeyUp('KeyP')]: t => Send('unpause-swarm', t),
-},
+const swarmControllerMachine: Blueprint = BlueprintAdd(
+  {
+    [onKeyPressed('KeyW')]: Send('move-swarm', 'up'),
+    [onKeyPressed('KeyA')]: Send('move-swarm', 'left'),
+    [onKeyPressed('KeyS')]: Send('move-swarm', 'down'),
+    [onKeyPressed('KeyD')]: Send('move-swarm', 'right'),
+    [onKeyDown('KeyP')]: t => Send('pause-swarm', t),
+    [onKeyUp('KeyP')]: t => Send('unpause-swarm', t),
+  },
   SingletonSequenceMachine([
     'pause-swarm',
     'unpause-swarm'
   ], ([t1, t2]: [number, number]) => ShowDialogue(`paused for ${t2 - t1}ms`))
 );
 
-const swarmMachine: Blueprint = {
-  'pause-swarm': Effect(() => simulation.alpha(0)),
-  'unpause-swarm': Effect(() => {
-    simulation.alpha(1);
-    simulation.restart();
-  }),
-  'toggle-swarm': Effect(() => simulation.alpha() > 0
-    ? Send('pause-swarm')
-    : Send('unpause-swarm')
-  ),
-  'move-swarm': async (direction: 'up' | 'down' | 'left' | 'right') => {
-    const MoveMouseForce = (byX: number, byY: number) => {
-      mousePos[0] += byX;
-      mousePos[1] += byY;
+const swarmMachine: Blueprint = BlueprintAdd(
+  {
+    'pause-swarm': Effect(() => simulation.alpha(0)),
+    'unpause-swarm': Effect(() => {
+      simulation.alpha(1);
+      simulation.restart();
+    }),
+    'toggle-swarm': Effect(() => simulation.alpha() > 0
+      ? Send('pause-swarm')
+      : Send('unpause-swarm')
+    ),
+    'move-swarm': async (direction: 'up' | 'down' | 'left' | 'right') => {
+      const MoveMouseForce = (byX: number, byY: number) => {
+        mousePos[0] += byX;
+        mousePos[1] += byY;
 
-      return Effect(() => updateMouseForce(mousePos[0], mousePos[1]));
-    };
+        return Effect(() => updateMouseForce(mousePos[0], mousePos[1]));
+      };
 
-    const speed = 10;
+      const speed = 10;
 
-    switch (direction) {
-      case 'up':    return MoveMouseForce(0, -speed);
-      case 'down':  return MoveMouseForce(0, speed);
-      case 'left':  return MoveMouseForce(-speed, 0);
-      case 'right': return MoveMouseForce(speed, 0);
+      switch (direction) {
+        case 'up':    return MoveMouseForce(0, -speed);
+        case 'down':  return MoveMouseForce(0, speed);
+        case 'left':  return MoveMouseForce(-speed, 0);
+        case 'right': return MoveMouseForce(speed, 0);
+      }
+    },
+    'swarm-moving-diagonally': async (direction: [string, string]) => {
+      console.log('diagonally');
+
+      nodes
+        .style('fill', 'red');
+    },
+    'swarm-moving-cardinally': async (direction: [string, string]) => {
+      console.log('cardinally');
+
+      nodes
+        .style('fill', 'black');
     }
-  }
-};
+  },
+  WindowMachine(10,
+    'move-swarm', (...directions: Array<string>) => {
+      const sum = directions
+        .map(dir => dir === 'up' || dir === 'down'
+          ? 1
+          : -1
+        )
+        .reduce((a, b) => a + b, 0);
+
+      if (sum >= -8 && sum <= 8) {
+        return Send('swarm-moving-diagonally', directions);
+      }
+    }
+  ),
+  WindowMachine(10,
+    'move-swarm', (...directions: Array<string>) => {
+      const sum = directions
+        .map(dir => dir === 'up' || dir === 'down'
+          ? 1
+          : -1
+        )
+        .reduce((a, b) => a + b, 0);
+
+      if (sum <= -9 || sum >= 9 ) {
+        return Send('swarm-moving-cardinally', directions);
+      }
+
+    }
+  )
+);
 
 const introMachine: Blueprint = {
   'intro-start': ShowDialogue('Welcome to the Thunderdome')
@@ -226,25 +276,41 @@ const machine = Machine(
   BlueprintAdd(
     swarmMachine,
     swarmControllerMachine,
-    SingletonSequenceMachine([
-      onKeyDown('Space'),
-      onKeyDown('KeyF'),
-      onKeyDown('KeyG')
-    ], msg => {
-      console.log(msg);
-      return ShowDialogue('What it is my dog');
-    }),
+    // SingletonSequenceMachine([
+    //   onKeyDown('Space'),
+    //   onKeyDown('KeyF'),
+    //   onKeyDown('KeyG')
+    // ], msg => {
+    //   console.log(msg);
+    //   return ShowDialogue('What it is my dog');
+    // }),
     NonSingletonSequenceMachine([
       onKeyDown('Enter'),
       onKeyDown('Enter')
     ], ([t1, t2]: [number, number]) => (
       ShowDialogue(`Time between Enters: ${Math.floor(t2 - t1) / 1000}s`)
     )),
+    WindowMachine(2,
+      onKeyDown(), ([_, t1]: GenericKeyDownMessage, [__, t2]: GenericKeyDownMessage) => {
+        console.log(`Time between keydown events: ${Math.floor((t2 - t1) / 100) / 10}`);
+      }
+    ),
     introMachine,
     introController,
     logMachine,
     errorMachine,
-    errorMachine2
+    errorMachine2,
+    // SetMachine([
+    //   onKeyDown('Space'),
+    //   onKeyDown('Space'),
+    //   onKeyDown('Space')
+    // ], (fromSpace: SpecificKeyDownMessage, fromF: SpecificKeyDownMessage, fromG: SpecificKeyDownMessage) => {
+    //   console.log('-----');
+    //   console.log(`S: ${fromSpace}`);
+    //   console.log(`F: ${fromF}`);
+    //   console.log(`G: ${fromG}`);
+    //   console.log('-----');
+    // })
   )
 );
 

@@ -70,7 +70,6 @@ export const PreGeneratedNonSingletonSequenceMachine = (
       };
 
       return Series(
-        () => console.log('beginning series'),
         ...allEvents.slice(1).map((eventName) => (
           Once(eventName, addToMsgs)
         )),

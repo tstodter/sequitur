@@ -31,6 +31,7 @@ import { wait } from './util';
 import { SingletonSequenceMachine, NonSingletonSequenceMachine, FallbackMachine, PreGeneratedNonSingletonSequenceMachine, SetMachine } from './state-machine/engineers';
 import { WindowMachine } from './state-machine/engineers/WindowMachine';
 import { Once } from './state-machine/MachineResponse/Once';
+import {fabrik, Point} from './fabrik';
 
 ////////////////////////
 const width = window.innerWidth;
@@ -71,14 +72,18 @@ const rand = d3.randomUniform(0, 100);
 const sample = d3.range(0.15 * 100)
   .map(i => Math.floor(rand()));
 
-type NodeDatum = {
+export type NodeDatum = {
   x: number;
   y: number;
   vx: number;
   vy: number;
-  isLeader: boolean;
 };
-const nodeData: Array<NodeDatum> = d3.range(100).map((x, i) => ({
+
+export type SwarmNodeDatum = NodeDatum & {
+  isLeader?: boolean;
+};
+
+const nodeData: Array<NodeDatum> = d3.range(0).map((x, i) => ({
   x: Math.random() * width,
   y: Math.random() * height,
   vx: (2 - Math.random()),
@@ -88,8 +93,8 @@ const nodeData: Array<NodeDatum> = d3.range(100).map((x, i) => ({
 
 type Link = d3.SimulationLinkDatum<d3.SimulationNodeDatum>;
 const linkData: Array<Link> = R.pipe(
-  R.filter((n: NodeDatum) => n.isLeader),
-  R.chain((n: NodeDatum) => {
+  R.filter((n: SwarmNodeDatum) => n.isLeader),
+  R.chain((n: SwarmNodeDatum) => {
     const shuffledNodes = d3.shuffle(nodeData);
 
     return shuffledNodes.slice(0, 0.25 * nodeData.length).map(n2 => ({
@@ -126,11 +131,12 @@ d3.select('svg')
     updateMouseForce(mousePos[0], mousePos[1]);
   });
 
+const collisionForce = d3.forceCollide().radius(15);
 const simulation = d3.forceSimulation(nodeData)
   .velocityDecay(.8)
   .alphaDecay(0)
   // .force('cohesion', d3.forceManyBody().strength(1))
-  .force('collide', d3.forceCollide().radius(15))
+  .force('collide', collisionForce)
   .force('mouse-gravity-x', mouseForceX)
   .force('mouse-gravity-y', mouseForceY)
   .on('tick', () => {
@@ -199,12 +205,14 @@ const swarmMachine: Blueprint = BlueprintAdd(
     'swarm-moving-diagonally': async (direction: [string, string]) => {
       console.log('diagonally');
 
+      collisionForce.radius(30);
       nodes
         .style('fill', 'red');
     },
     'swarm-moving-cardinally': async (direction: [string, string]) => {
       console.log('cardinally');
 
+      collisionForce.radius(15);
       nodes
         .style('fill', 'black');
     }
@@ -321,3 +329,104 @@ const driver = AddDrivers(
 )(machine);
 
 driver.engage();
+
+
+
+
+
+const ikRoot = [width / 2, 0] as Point;
+const ikTarget = [mousePos[0], mousePos[1]] as Point;
+
+const numPoints = 25;
+
+
+const limbScale = d3.scaleSqrt()
+  .domain([1, numPoints - 1])
+  .range([2 * 1000 / numPoints, 50]);
+
+const areaScale = d3.scaleSqrt()
+  .domain([0, numPoints])
+  .range([3, 20]);
+
+const edgeScale = d3.scaleSqrt()
+  .domain([0, numPoints])
+  .range([1, 10]);
+
+// const ikLimb = d3.range(10 - 1).map(_ => distBxPoints);
+const ikLimb: number[] = d3.range(numPoints - 1)
+  .map((_, i) => limbScale(i + 1));
+
+let jointPoints: Point[] = ikLimb.reduce((points, boneLength) => ([
+  ...points,
+  R.over(
+    R.lensIndex(1),
+    R.add(boneLength),
+    R.last(points)
+  )
+]), [ikRoot]);
+
+let jointNodes = jointPoints.map(p => ({
+  x: p[0],
+  y: p[1]
+} as NodeDatum));
+
+const ikEdges: Array<[NodeDatum, NodeDatum]> = R.aperture(2, jointNodes);
+
+const boneSimulation = d3.forceSimulation(jointNodes)
+  .velocityDecay(.8)
+  .alphaDecay(0)
+  .force('collide', d3.forceCollide()
+    .radius((_, i) => ikLimb[i] / 2)
+    .strength(1)
+  )
+  .force('fabrik', (alpha) => {
+    const points = [...jointPoints];
+
+    fabrik(1)(
+      points,
+      ikLimb,
+      ikTarget
+    );
+
+    points.forEach((p, i) => {
+      jointNodes[i].vx += (p[0] - jointNodes[i].x) * alpha * 0.5;
+      jointNodes[i].vy += (p[1] - jointNodes[i].y) * alpha * 0.5;
+      // jointNodes[i].x = p[0];
+      // jointNodes[i].y = p[1];
+    });
+  })
+  .on('tick', () => {
+    const target = ikTarget;
+
+    svg.selectAll('.fabrik-edges')
+      .data(ikEdges)
+      .join('line')
+        .attr('class', 'fabrik-edges')
+        .attr('stroke-width', (_, i) => edgeScale(i))
+        .style('stroke', 'black')
+        .attr('x1', d => d[0].x)
+        .attr('y1', d => d[0].y)
+        .attr('x2', d => d[1].x)
+        .attr('y2', d => d[1].y);
+
+    svg.selectAll('.starting-points')
+      .data(jointNodes)
+      .join('circle')
+        .attr('class', 'starting-points')
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y)
+        .attr('r', (d, i) => areaScale(i))
+        .style('fill', 'red')
+        .style('stroke', 'red');
+  });
+
+
+d3.select('svg')
+  .on('mousemove', () => {
+    ikTarget[0] = d3.event.pageX;
+    ikTarget[1] = d3.event.pageY;
+  });
+
+
+
+

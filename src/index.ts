@@ -25,7 +25,7 @@ import KeypressDriver, { onKeyPressed, onKeyUp, LetterDriver, WhitespaceDriver, 
 import {AddDrivers} from './drivers/Driver';
 import { BlueprintAdd, Blueprint, BlueprintSubtract2 } from './state-machine/Blueprint';
 import { logMachine, onLog } from './machines/LogMachine';
-import { Send, Series, Add, Effect, Try, MachineResponseF, Parallel } from './state-machine/MachineResponse';
+import { Send, Series, Add, Effect, Try, MachineResponseF, Parallel, MachineResponse, Subtract } from './state-machine/MachineResponse';
 import { Machine } from './state-machine/Machine';
 import { wait } from './util';
 import { SingletonSequenceMachine, NonSingletonSequenceMachine, FallbackMachine, PreGeneratedNonSingletonSequenceMachine, SetMachine } from './state-machine/engineers';
@@ -319,6 +319,20 @@ const machine = Machine(
     //   console.log(`G: ${fromG}`);
     //   console.log('-----');
     // })
+    {
+      [onKeyPressed('KeyW')]: Send('move-limb', 'up'),
+      [onKeyPressed('KeyA')]: Send('move-limb', 'left'),
+      [onKeyPressed('KeyS')]: Send('move-limb', 'down'),
+      [onKeyPressed('KeyD')]: Send('move-limb', 'right'),
+      'move-limb': async (direction: 'up' | 'down' | 'left' | 'right') => {
+        switch (direction) {
+          case 'up':    return Effect(() => ikTarget[1] -= 30);
+          case 'down':  return Effect(() => ikTarget[1] += 30);
+          case 'left':  return Effect(() => ikTarget[0] -= 30);
+          case 'right': return Effect(() => ikTarget[0] += 30);
+        }
+      }
+    }
   )
 );
 
@@ -334,23 +348,24 @@ driver.engage();
 
 
 
-const ikRoot = [width / 2, 0] as Point;
+const ikRoot = [width / 2, height] as Point;
 const ikTarget = [mousePos[0], mousePos[1]] as Point;
 
-const numPoints = 25;
+const numPoints = 9;
 
 
 const limbScale = d3.scaleSqrt()
   .domain([1, numPoints - 1])
-  .range([2 * 1000 / numPoints, 50]);
+  .range([1000, 5])
+  // .range([2 * 1000 / numPoints, 50]);
 
 const areaScale = d3.scaleSqrt()
   .domain([0, numPoints])
-  .range([3, 20]);
+  .range([3, 40]);
 
 const edgeScale = d3.scaleSqrt()
   .domain([0, numPoints])
-  .range([1, 10]);
+  .range([2, 50]);
 
 // const ikLimb = d3.range(10 - 1).map(_ => distBxPoints);
 const ikLimb: number[] = d3.range(numPoints - 1)
@@ -360,7 +375,7 @@ let jointPoints: Point[] = ikLimb.reduce((points, boneLength) => ([
   ...points,
   R.over(
     R.lensIndex(1),
-    R.add(boneLength),
+    R.subtract(R.__, boneLength),
     R.last(points)
   )
 ]), [ikRoot]);
@@ -372,21 +387,35 @@ let jointNodes = jointPoints.map(p => ({
 
 const ikEdges: Array<[NodeDatum, NodeDatum]> = R.aperture(2, jointNodes);
 
+function assertNever(x: never): never {
+  throw new Error("Unexpected object: " + x);
+}
+
+let rads = 0;
 const boneSimulation = d3.forceSimulation(jointNodes)
   .velocityDecay(.8)
   .alphaDecay(0)
-  .force('collide', d3.forceCollide()
-    .radius((_, i) => ikLimb[i] / 2)
-    .strength(1)
-  )
+  // .force('collide', d3.forceCollide()
+  //   .radius((_, i) => ikLimb[i] / 2)
+  //   .strength(1)
+  // )
   .force('fabrik', (alpha) => {
+    rads += 0.1;
     const points = [...jointPoints];
 
-    fabrik(1)(
+    const revolvedTarget = ikTarget;
+    // [
+    //   Math.cos(rads) * 400 + ikTarget[0],
+    //   Math.sin(rads) * 400 + ikTarget[1]
+    // ];
+
+    fabrik(1, Infinity, true)(
       points,
       ikLimb,
-      ikTarget
+      revolvedTarget as Point
     );
+
+    jointPoints = points;
 
     points.forEach((p, i) => {
       jointNodes[i].vx += (p[0] - jointNodes[i].x) * alpha * 0.5;
@@ -397,17 +426,27 @@ const boneSimulation = d3.forceSimulation(jointNodes)
   })
   .on('tick', () => {
     const target = ikTarget;
+debugger;
 
-    svg.selectAll('.fabrik-edges')
-      .data(ikEdges)
-      .join('line')
-        .attr('class', 'fabrik-edges')
-        .attr('stroke-width', (_, i) => edgeScale(i))
-        .style('stroke', 'black')
-        .attr('x1', d => d[0].x)
-        .attr('y1', d => d[0].y)
-        .attr('x2', d => d[1].x)
-        .attr('y2', d => d[1].y);
+    svg.selectAll('.limb-path')
+    .data([jointNodes.map(({x, y}) => ([x, y] as [number, number]))])
+    .join('path')
+      .attr('class', 'limb-path')
+      .attr('fill', 'none')
+      .attr('stroke', 'black')
+      .attr('stroke-width', (d, i) => edgeScale(i))
+      .attr('d', d3.line().curve(d3.curveLinear));
+
+    // svg.selectAll('.fabrik-edges')
+    //   .data(ikEdges)
+    //   .join('line')
+    //     .attr('class', 'fabrik-edges')
+    //     .attr('stroke-width', (_, i) => edgeScale(i))
+    //     .style('stroke', 'black')
+    //     .attr('x1', d => d[0].x)
+    //     .attr('y1', d => d[0].y)
+    //     .attr('x2', d => d[1].x)
+    //     .attr('y2', d => d[1].y);
 
     svg.selectAll('.starting-points')
       .data(jointNodes)
@@ -416,13 +455,13 @@ const boneSimulation = d3.forceSimulation(jointNodes)
         .attr('cx', d => d.x)
         .attr('cy', d => d.y)
         .attr('r', (d, i) => areaScale(i))
-        .style('fill', 'red')
-        .style('stroke', 'red');
+        .style('fill', 'black')
+        .style('stroke', 'black');
   });
-
 
 d3.select('svg')
   .on('mousemove', () => {
+
     ikTarget[0] = d3.event.pageX;
     ikTarget[1] = d3.event.pageY;
   });

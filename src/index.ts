@@ -31,7 +31,7 @@ import { wait } from './util';
 import { SingletonSequenceMachine, NonSingletonSequenceMachine, FallbackMachine, PreGeneratedNonSingletonSequenceMachine, SetMachine } from './state-machine/engineers';
 import { WindowMachine } from './state-machine/engineers/WindowMachine';
 import { Once } from './state-machine/MachineResponse/Once';
-import {fabrik, Point, fabrikGenerator} from './fabrik';
+import {fabrik, Point} from './fabrik';
 
 ////////////////////////
 const width = window.innerWidth;
@@ -356,7 +356,7 @@ const numPoints = 9;
 
 const limbScale = d3.scaleSqrt()
   .domain([1, numPoints - 1])
-  .range([500, 500])
+  .range([1000, 5])
   // .range([2 * 1000 / numPoints, 50]);
 
 const areaScale = d3.scaleSqrt()
@@ -391,13 +391,7 @@ function assertNever(x: never): never {
   throw new Error("Unexpected object: " + x);
 }
 
-let now = performance.now();
-const points = [...jointPoints];
-let fabrikProgress = fabrikGenerator(1, Infinity, true)(
-  points,
-  ikLimb,
-  ikTarget
-);
+let rads = 0;
 const boneSimulation = d3.forceSimulation(jointNodes)
   .velocityDecay(.8)
   .alphaDecay(0)
@@ -406,29 +400,33 @@ const boneSimulation = d3.forceSimulation(jointNodes)
   //   .strength(1)
   // )
   .force('fabrik', (alpha) => {
-    if (performance.now() - now > 1000) {
-      now = performance.now();
+    rads += 0.1;
+    const points = [...jointPoints];
 
-      const next = fabrikProgress.next();
-      if (next.done) {
-        fabrikProgress = fabrikGenerator(1, 1, true)(
-          points,
-          ikLimb,
-          ikTarget
-        );
-      }
+    const revolvedTarget = ikTarget;
+    // [
+    //   Math.cos(rads) * 400 + ikTarget[0],
+    //   Math.sin(rads) * 400 + ikTarget[1]
+    // ];
 
-      jointPoints = points;
+    fabrik(1, Infinity, true)(
+      points,
+      ikLimb,
+      revolvedTarget as Point
+    );
 
-    }
+    jointPoints = points;
 
     points.forEach((p, i) => {
       jointNodes[i].vx += (p[0] - jointNodes[i].x) * alpha * 0.5;
       jointNodes[i].vy += (p[1] - jointNodes[i].y) * alpha * 0.5;
+      // jointNodes[i].x = p[0];
+      // jointNodes[i].y = p[1];
     });
   })
   .on('tick', () => {
     const target = ikTarget;
+debugger;
 
     svg.selectAll('.limb-path')
     .data([jointNodes.map(({x, y}) => ([x, y] as [number, number]))])

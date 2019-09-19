@@ -4,22 +4,24 @@
 `npm run start`
 
 ## What is this?
-This is a start at a framework for writing highly-composable state machines.
+This is a start at a framework for writing highly-composable state machines. While it was initially inspired by Dan Abramov's [excellent article on algebraic effects](https://overreacted.io/algebraic-effects-for-the-rest-of-us/), the end result looks and acts more like a framework for composing lightweight, anonymous state machines.
+
+
 Each event responder in a machine can (and should be) pure, returning a description
 of the effect it wants to have on the system. This effect can be a
 [reduction](https://en.wikipedia.org/wiki/Fold_(higher-order_function))
 of the state machine from its previous state to a new state, a message to be sent
-back into the machine, or the output of a number of effect combinators (like Parallel
-for running multiple effects, or Try for running an effect with an error handler).
+back into the machine, or the output of a number of effect combinators (like `Parallel`
+for running multiple effects, or `Try` for running an effect with an error handler).
 
 This project was written for two primary reasons. One, as an experiment in writing
-more-composable D3 code, as most code written in D3 is "composed" by putting one
+more-composable D3 code, as most code written in D3 (purely in D3, ignoring combination with composable frameworks like React) is composed by putting one
 piece of code before/after another. Two, because I wanted to be able to specify
 event responders that responded to more than one event. For instance, an responder
 that activates on every set of 10 subsequent sensor readings, if you wanted
 to monitor a running average. Or, an event responder that activates only when
 a player says "yes" to going on that kill-10-goblins quest, but has in the past
-already killed 50 goblins and said no to the elf princess Sharlene.
+already killed 50 goblins and said no to the elf princess Sharlene. My intuition here was that a multi-event responder could be curried into a series of single-event responders, each one modifying the system to respond to the next event in sequence.
 
 ### Status
 First draft (working and complete-for-now). Currently displays a WASD-controllable swarm

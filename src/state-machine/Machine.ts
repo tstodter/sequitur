@@ -65,73 +65,72 @@ export const Machine = (desc: Blueprint): Machine => {
     async () => {},
     async (res: MachineResponsePromise) => handleResponse(await res),
     async (res: MachineResponseF) => handleResponse(res()),
-    async (res: Add) => {
-      machine.desc = BlueprintAdd2(
-        machine.desc,
-        res.operand
-      );
-      // console.log('+++', machine.desc);
-
-    },
-    async (res: Subtract) => {
-      machine.desc = BlueprintSubtract2(
-        machine.desc,
-        res.operand
-      );
-      // console.log('---', machine.desc);
-    },
-    async (res: Effect) => res.effect(),
-    async (res: Try) => {
-      try {
-        return await handleResponse(res.try);
-      } catch (e) {
-        if (isMachineResponseF(res.failure)) {
-          return handleResponse(await res.failure(e));
+    {
+      add: async ({operand}) => {
+        machine.desc = BlueprintAdd2(
+          machine.desc,
+          operand
+        );
+      },
+      subtract: async ({operand}) => {
+        machine.desc = BlueprintSubtract2(
+          machine.desc,
+          operand
+        );
+      },
+      effect: async (res) => res.effect(),
+      'try': async ({try: onTry, failure: onFailure}) => {
+        try {
+          return await handleResponse(onTry);
+        } catch (e) {
+          if (isMachineResponseF(onFailure)) {
+            return handleResponse(await onFailure(e));
+          }
+          return handleResponse(onFailure);
         }
-        return handleResponse(res.failure);
-      }
-    },
-    async (res: Once) => {
-      const eventualMsg = new Promise<any>(resolve => {
-        if (res.name in waitingFor) {
-          waitingFor[res.name].push(resolve);
-        } else {
-          waitingFor[res.name] = [resolve];
+      },
+      once: async ({name, handler}) => {
+        const eventualMsg = new Promise<any>(resolve => {
+          if (name in waitingFor) {
+            waitingFor[name].push(resolve);
+          } else {
+            waitingFor[name] = [resolve];
+          }
+        });
+
+        const msg = await eventualMsg;
+
+        const invokeHandler = invokeHandlerWithMsg(handleResponse, msg);
+        return await invokeHandler(invokeHandler, handler);
+      },
+      send: async ({name, message}) => {
+        // console.log('-----', 'sending', name, message);
+        const eventName = name;
+        const msg = message;
+
+        const invokeHandler = invokeHandlerWithMsg(handleResponse, msg);
+
+        if (eventName in waitingFor) {
+          const waitingResponses = waitingFor[eventName];
+          delete waitingFor[eventName];
+
+          waitingResponses.forEach(resolve => resolve(message));
         }
-      });
 
-      const msg = await eventualMsg;
+        if (R.has(eventName, machine.desc)) {
+          return await invokeHandler(invokeHandler, machine.desc[eventName]);
+        }
+      },
+      series: async ({responses}) => {
+        return responses.reduce(async (accP: Promise<MachineResponse>, respItem: MachineResponse) => {
+          const acc = await accP;
 
-      const invokeHandler = invokeHandlerWithMsg(handleResponse, msg);
-      return await invokeHandler(invokeHandler, res.handler);
-    },
-    async (res: Send) => {
-      // console.log('-----', 'sending', res.name, res.message);
-      const eventName = res.name;
-      const msg = res.message;
-
-      const invokeHandler = invokeHandlerWithMsg(handleResponse, msg);
-
-      if (eventName in waitingFor) {
-        const waitingResponses = waitingFor[eventName];
-        delete waitingFor[eventName];
-
-        waitingResponses.forEach(resolve => resolve(res.message));
+          return handleResponse(respItem);
+        }, Promise.resolve());
+      },
+      parallel: async ({responses}) => {
+        await Promise.all(responses.map(handleResponse));
       }
-
-      if (R.has(eventName, machine.desc)) {
-        return await invokeHandler(invokeHandler, machine.desc[eventName]);
-      }
-    },
-    async (res: Series) => {
-      return res.responses.reduce(async (accP: Promise<MachineResponse>, respItem: MachineResponse) => {
-        const acc = await accP;
-
-        return handleResponse(respItem);
-      }, Promise.resolve());
-    },
-    async (res: Parallel) => {
-      await Promise.all(res.responses.map(handleResponse));
     }
   );
 

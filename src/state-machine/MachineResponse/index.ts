@@ -9,6 +9,7 @@ import { Series } from './Series';
 import { Parallel, isParallel } from './Parallel';
 import { Machine } from '../Machine';
 import { Once } from './Once';
+import { matcher, UnionMatchObj } from '../../sumUtilities';
 
 export * from './Add';
 export * from './Subtract';
@@ -91,31 +92,17 @@ export const SubtractMachineResponse = (a: MachineResponse, b: MachineResponse):
   }
 };
 
+const plainMachineResponseMatch = matcher<PlainMachineResponse>();
+
 export const match = <T>(
   onVoid    : () => T,
   onPromise : (_: MachineResponsePromise) => T,
   onF       : (_: MachineResponseF) => T,
-  onAdd     : (_: Add) => T,
-  onSubtract: (_: Subtract) => T,
-  onEffect  : (_: Effect) => T,
-  onTry     : (_: Try) => T,
-  onOnce : (_: Once) => T,
-  onSend    : (_: Send) => T,
-  onSeries  : (_: Series) => T,
-  onParallel: (_: Parallel) => T
+  onPlain   : UnionMatchObj<PlainMachineResponse, T>
 ) => (res: MachineResponse) => {
   if (!res)                          return onVoid();
   if (isMachineResponsePromise(res)) return onPromise(res);
   if (isMachineResponseF(res))       return onF(res);
 
-  switch (res.kind) {
-    case 'add'     : return onAdd(res);
-    case 'subtract': return onSubtract(res);
-    case 'effect'  : return onEffect(res);
-    case 'try'     : return onTry(res);
-    case 'once'    : return onOnce(res);
-    case 'send'    : return onSend(res);
-    case 'series'  : return onSeries(res);
-    case 'parallel': return onParallel(res);
-  }
+  return plainMachineResponseMatch<T>(onPlain)(res);
 };
